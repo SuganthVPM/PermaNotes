@@ -27,7 +27,7 @@ jobs:
       
     - name: Package installer with Inno Setup
       run: |
-        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 
     - name: Release to GitHub
       uses: softprops/action-gh-release@v1
