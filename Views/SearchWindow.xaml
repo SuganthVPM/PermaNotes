@@ -1,0 +1,50 @@
+<Window x:Class="DesktopNotes.Views.SearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Perma Notes — Search" 
+        Height="400" Width="450"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F5F5"
+        ShowInTaskbar="True"
+        Loaded="Window_Loaded">
+    
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Search Box -->
+        <TextBox x:Name="SearchBox" Grid.Row="0" 
+                 Height="32" FontSize="16" Padding="4,2" 
+                 VerticalContentAlignment="Center"
+                 TextChanged="SearchBox_TextChanged"/>
+                 
+        <TextBlock Grid.Row="0" x:Name="SearchPlaceholder" 
+                   Text="Search notes by title or content..." 
+                   Foreground="#999" FontSize="16" 
+                   Margin="8,4,4,4" IsHitTestVisible="False" 
+                   VerticalAlignment="Center"/>
+
+        <!-- Results List -->
+        <ListBox x:Name="ResultsList" Grid.Row="2" 
+                 BorderBrush="#DDD" BorderThickness="1" 
+                 Background="White" 
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 MouseDoubleClick="ResultsList_MouseDoubleClick">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="4" Background="Transparent" Cursor="Hand">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="{Binding Title}" FontWeight="Bold" FontSize="14" Foreground="#333"/>
+                        <TextBlock Grid.Row="1" Text="{Binding Snippet}" FontSize="12" Foreground="#666" TextTrimming="CharacterEllipsis" MaxHeight="32"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</Window>

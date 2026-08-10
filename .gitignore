@@ -1,0 +1,20 @@
+## Visual Studio / .NET build outputs
+[Bb]in/
+[Oo]bj/
+dist/
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+## Local notes data / backups (do not commit user notes)
+notes.json
+notes.tmp
+settings.json
+backups/
+
+## OS generated
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

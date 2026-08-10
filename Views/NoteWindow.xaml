@@ -1,0 +1,192 @@
+<Window x:Class="DesktopNotes.Views.NoteWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Perma Note" 
+        Height="280" Width="320"
+        MinHeight="150" MinWidth="200"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="#01000000"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        Loaded="Window_Loaded"
+        StateChanged="Window_StateChanged"
+        ContextMenu="{DynamicResource NoteContextMenu}">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome ResizeBorderThickness="8" CaptionHeight="0" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Full Context Menu -->
+        <ContextMenu x:Key="NoteContextMenu">
+            <MenuItem Header="New Note" Click="NewNoteButton_Click"/>
+            <MenuItem Header="Duplicate" Click="DuplicateNote_Click"/>
+            <MenuItem Header="Delete Note" Click="DeleteNoteButton_Click"/>
+            <Separator/>
+            <MenuItem Header="Color">
+                <MenuItem Header="Yellow" Click="ColorMenu_Click" Tag="#FFF9C4">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#FFF9C4" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Orange" Click="ColorMenu_Click" Tag="#FFE0B2">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#FFE0B2" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Green" Click="ColorMenu_Click" Tag="#A5D6A7">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#A5D6A7" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Teal" Click="ColorMenu_Click" Tag="#80CBC4">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#80CBC4" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Blue" Click="ColorMenu_Click" Tag="#90CAF9">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#90CAF9" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Purple" Click="ColorMenu_Click" Tag="#CE93D8">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#CE93D8" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Pink" Click="ColorMenu_Click" Tag="#F48FB1">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#F48FB1" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="White" Click="ColorMenu_Click" Tag="#FAFAFA">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#FAFAFA" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Gray" Click="ColorMenu_Click" Tag="#E0E0E0">
+                    <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#E0E0E0" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+            </MenuItem>
+            <MenuItem Header="Opacity">
+                <MenuItem Header="100%" Click="OpacityMenu_Click" Tag="1.0"/>
+                <MenuItem Header="90%" Click="OpacityMenu_Click" Tag="0.90"/>
+                <MenuItem Header="80%" Click="OpacityMenu_Click" Tag="0.80"/>
+                <MenuItem Header="70%" Click="OpacityMenu_Click" Tag="0.70"/>
+                <MenuItem Header="60%" Click="OpacityMenu_Click" Tag="0.60"/>
+                <MenuItem Header="50%" Click="OpacityMenu_Click" Tag="0.50"/>
+                <MenuItem Header="40%" Click="OpacityMenu_Click" Tag="0.40"/>
+                <MenuItem Header="30%" Click="OpacityMenu_Click" Tag="0.30"/>
+            </MenuItem>
+            <Separator/>
+            <MenuItem x:Name="AlwaysOnTopMenuItem" Header="Always on Top" 
+                      IsCheckable="True" Click="AlwaysOnTopMenu_Click"/>
+            <Separator/>
+            <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
+        </ContextMenu>
+
+        <!-- Header button style (+ ✕ icons) -->
+        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#555555"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#20000000"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Card border style with focus indicator -->
+        <Style x:Key="CardBorderStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="8">
+        <Grid.Effect>
+            <!-- Increase shadow depth when focused -->
+            <DropShadowEffect x:Name="WindowShadow" BlurRadius="10" ShadowDepth="2" Direction="270" Color="#50000000" Opacity="0.5"/>
+        </Grid.Effect>
+
+        <Border x:Name="CardBorder" Background="#FFF9C4" BorderBrush="#D0C070" Style="{StaticResource CardBorderStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="36"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header / Drag Bar -->
+                <Grid Grid.Row="0" x:Name="HeaderGrid" Background="#18000000" 
+                      MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Title: TextBlock by default, TextBox on double-click -->
+                    <TextBlock x:Name="TitleBlock" Grid.Column="0" 
+                               Margin="10,0,0,0" 
+                               VerticalAlignment="Center" 
+                               FontWeight="SemiBold" 
+                               FontSize="13" 
+                               Foreground="#333333"
+                               TextTrimming="CharacterEllipsis"
+                               MouseLeftButtonDown="TitleBlock_MouseLeftButtonDown"/>
+
+                    <TextBox x:Name="TitleEditBox" Grid.Column="0" 
+                             Margin="8,2,4,2" 
+                             VerticalAlignment="Center" 
+                             FontWeight="SemiBold" 
+                             FontSize="13" 
+                             Foreground="#333333" 
+                             Background="#30FFFFFF" 
+                             BorderThickness="1"
+                             BorderBrush="#80000000"
+                             Padding="2,1"
+                             Visibility="Collapsed"
+                             LostFocus="TitleEditBox_LostFocus"
+                             KeyDown="TitleEditBox_KeyDown"/>
+
+                    <!-- Saved Indicator -->
+                    <TextBlock x:Name="SavedIndicator" Grid.Column="1" 
+                               Text="Saved" 
+                               VerticalAlignment="Center" 
+                               FontSize="11" 
+                               Foreground="#88333333" 
+                               Margin="0,0,8,0"
+                               Opacity="0"/>
+
+                    <Button Grid.Column="2" Content="+" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="New Note" Click="NewNoteButton_Click" Margin="0,0,4,0"/>
+
+                    <Button Grid.Column="3" Content="✕" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="Delete Note" Click="DeleteNoteButton_Click" Margin="0,0,6,0"/>
+                </Grid>
+
+                <!-- Rich Text Content Editor -->
+                <RichTextBox x:Name="ContentRichTextBox" Grid.Row="1" 
+                             Margin="8" 
+                             AcceptsReturn="True" 
+                             AcceptsTab="True" 
+                             VerticalScrollBarVisibility="Auto" 
+                             Background="Transparent" 
+                             BorderThickness="0" 
+                             FontSize="14" 
+                             Foreground="#222222" 
+                             FontFamily="Segoe UI"
+                             TextChanged="ContentRichTextBox_TextChanged"
+                             ContextMenu="{DynamicResource NoteContextMenu}">
+                </RichTextBox>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
