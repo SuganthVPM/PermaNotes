@@ -79,21 +79,14 @@ namespace DesktopNotes.Views
 
         private void CustomColor_Click(object sender, RoutedEventArgs e)
         {
-            using var colorDialog = new System.Windows.Forms.ColorDialog();
-            
-            try 
+            var currentColorHex = (DefaultColorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "#FFF9C4";
+            var dialog = new ColorWheelDialog(currentColorHex)
             {
-                var currentColorHex = (DefaultColorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "#FFF9C4";
-                var currentColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(currentColorHex);
-                colorDialog.Color = System.Drawing.Color.FromArgb(currentColor.A, currentColor.R, currentColor.G, currentColor.B);
-            } 
-            catch { }
+                Owner = this
+            };
 
-            if (colorDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true && dialog.SelectedHexColor is string hexColor)
             {
-                var selectedColor = colorDialog.Color;
-                string hexColor = $"#{selectedColor.R:X2}{selectedColor.G:X2}{selectedColor.B:X2}";
-                
                 ComboBoxItem? customItem = null;
                 foreach (ComboBoxItem item in DefaultColorCombo.Items)
                 {

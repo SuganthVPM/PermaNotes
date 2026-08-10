@@ -27,8 +27,11 @@ Notes are **NOT** always-on-top. They live at the desktop level, just like Windo
 - **Drag to move** — Click and drag the title bar
 - **Resize** — Drag the bottom-right corner grip
 - **Double-click title to rename** — Clean inline editing with Enter to confirm, Escape to cancel
-- **6 note colors** — Yellow, Blue, Green, Pink, White, Gray (right-click menu)
+- **Color Customization** — Right-click to choose from standard colors or pick a **Custom Color** using the interactive color wheel.
+- **Dynamic Contrast** — Text and icon colors automatically switch to white on dark custom backgrounds for perfect legibility.
 - **Opacity control** — 100%, 85%, 70%, 50% (right-click menu)
+- **Rich Text Formatting** — Select text and right-click to apply **Bold, Italic, Underline, or Yellow Highlight**.
+- **Clipboard Actions** — Built-in Cut, Copy, and Paste in the right-click menu.
 - **Duplicate notes** — Right-click → Duplicate
 - **Delete with confirmation** — Prevents accidental deletion
 

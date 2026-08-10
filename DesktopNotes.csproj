@@ -11,6 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>PermaNotes</AssemblyName>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <Version>1.2.0</Version>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     
     <!-- Optimizations -->

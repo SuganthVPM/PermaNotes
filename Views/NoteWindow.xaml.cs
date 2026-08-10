@@ -123,6 +123,21 @@ namespace DesktopNotes.Views
                     borderColor.A = (byte)(NoteModel.Opacity * 255);
                     CardBorder.BorderBrush = new SolidColorBrush(borderColor);
                 }
+
+                // Adaptive Text Color for contrast (especially for dark custom colors)
+                double luminance = (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255.0;
+                bool isDark = luminance < 0.5;
+                
+                var textColor = isDark ? System.Windows.Media.Brushes.White : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x22, 0x22));
+                var headerColor = isDark ? System.Windows.Media.Brushes.White : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
+                var iconColor = isDark ? System.Windows.Media.Brushes.White : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+
+                TitleBlock.Foreground = headerColor;
+                TitleEditBox.Foreground = headerColor;
+                ContentRichTextBox.Foreground = textColor;
+                ContentRichTextBox.CaretBrush = textColor; // Cursor color for the I-beam replacement
+                NewNoteBtn.Foreground = iconColor;
+                DeleteNoteBtn.Foreground = iconColor;
             }
             catch
             {
@@ -133,6 +148,13 @@ namespace DesktopNotes.Views
                 var borderColor = System.Windows.Media.Color.FromRgb(0xD0, 0xC0, 0x70);
                 borderColor.A = (byte)(NoteModel.Opacity * 255);
                 CardBorder.BorderBrush = new SolidColorBrush(borderColor);
+
+                TitleBlock.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
+                TitleEditBox.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
+                ContentRichTextBox.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x22, 0x22));
+                ContentRichTextBox.CaretBrush = ContentRichTextBox.Foreground;
+                NewNoteBtn.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                DeleteNoteBtn.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
             }
         }
 
@@ -222,6 +244,26 @@ namespace DesktopNotes.Views
 
         // --- Content editing (RichText) ---
 
+        private void HighlightText_Click(object sender, RoutedEventArgs e)
+        {
+            if (ContentRichTextBox.Selection.IsEmpty) return;
+
+            var currentBackground = ContentRichTextBox.Selection.GetPropertyValue(TextElement.BackgroundProperty);
+            if (currentBackground is SolidColorBrush brush && brush.Color == System.Windows.Media.Colors.Yellow)
+            {
+                // Toggle off
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, DependencyProperty.UnsetValue);
+            }
+            else
+            {
+                // Toggle on
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, System.Windows.Media.Brushes.Yellow);
+            }
+            
+            // Re-trigger text changed to save the new RTF data
+            ContentRichTextBox_TextChanged(this, null!);
+        }
+
         private void ContentRichTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_isInitializing) return;
@@ -304,19 +346,13 @@ namespace DesktopNotes.Views
 
         private void CustomColorMenu_Click(object sender, RoutedEventArgs e)
         {
-            using var colorDialog = new System.Windows.Forms.ColorDialog();
-            
-            try 
+            var dialog = new ColorWheelDialog(NoteModel.BackgroundColor)
             {
-                var currentColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(NoteModel.BackgroundColor);
-                colorDialog.Color = System.Drawing.Color.FromArgb(currentColor.A, currentColor.R, currentColor.G, currentColor.B);
-            } 
-            catch { }
+                Owner = this
+            };
 
-            if (colorDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true && dialog.SelectedHexColor is string hexColor)
             {
-                var selectedColor = colorDialog.Color;
-                string hexColor = $"#{selectedColor.R:X2}{selectedColor.G:X2}{selectedColor.B:X2}";
                 ApplyBackgroundColor(hexColor);
                 NoteChanged?.Invoke(this, EventArgs.Empty);
                 ShowSavedIndicator();
