@@ -37,13 +37,20 @@ namespace DesktopNotes.Views
             OpacitySlider.Value = settings.DefaultOpacity;
 
             // Select matching default color
+            bool colorFound = false;
             foreach (ComboBoxItem item in DefaultColorCombo.Items)
             {
                 if (item.Tag is string tag && tag.Equals(settings.DefaultNoteColor, StringComparison.OrdinalIgnoreCase))
                 {
                     item.IsSelected = true;
+                    colorFound = true;
                     break;
                 }
+            }
+            if (!colorFound)
+            {
+                var customItem = new ComboBoxItem { Content = "Custom", Tag = settings.DefaultNoteColor, IsSelected = true };
+                DefaultColorCombo.Items.Add(customItem);
             }
         }
 
@@ -67,6 +74,44 @@ namespace DesktopNotes.Views
             {
                 _currentStoragePath = fbd.SelectedPath;
                 StoragePathText.Text = _currentStoragePath;
+            }
+        }
+
+        private void CustomColor_Click(object sender, RoutedEventArgs e)
+        {
+            using var colorDialog = new System.Windows.Forms.ColorDialog();
+            
+            try 
+            {
+                var currentColorHex = (DefaultColorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "#FFF9C4";
+                var currentColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(currentColorHex);
+                colorDialog.Color = System.Drawing.Color.FromArgb(currentColor.A, currentColor.R, currentColor.G, currentColor.B);
+            } 
+            catch { }
+
+            if (colorDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                var selectedColor = colorDialog.Color;
+                string hexColor = $"#{selectedColor.R:X2}{selectedColor.G:X2}{selectedColor.B:X2}";
+                
+                ComboBoxItem? customItem = null;
+                foreach (ComboBoxItem item in DefaultColorCombo.Items)
+                {
+                    if (item.Content?.ToString() == "Custom")
+                    {
+                        customItem = item;
+                        break;
+                    }
+                }
+                
+                if (customItem == null)
+                {
+                    customItem = new ComboBoxItem { Content = "Custom" };
+                    DefaultColorCombo.Items.Add(customItem);
+                }
+                
+                customItem.Tag = hexColor;
+                customItem.IsSelected = true;
             }
         }
 

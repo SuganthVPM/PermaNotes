@@ -53,6 +53,8 @@
                 <MenuItem Header="Gray" Click="ColorMenu_Click" Tag="#E0E0E0">
                     <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#E0E0E0" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
                 </MenuItem>
+                <Separator/>
+                <MenuItem Header="Custom Color..." Click="CustomColorMenu_Click"/>
             </MenuItem>
             <MenuItem Header="Opacity">
                 <MenuItem Header="100%" Click="OpacityMenu_Click" Tag="1.0"/>

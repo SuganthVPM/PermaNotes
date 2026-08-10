@@ -51,7 +51,6 @@ namespace DesktopNotes.Views
             Height = NoteModel.Height;
             TitleBlock.Text = NoteModel.Title;
             Topmost = NoteModel.IsAlwaysOnTop;
-            Opacity = NoteModel.Opacity;
 
             if (TryFindResource("NoteContextMenu") is ContextMenu cm)
             {
@@ -103,6 +102,7 @@ namespace DesktopNotes.Views
             try
             {
                 var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hexColor);
+                color.A = (byte)(NoteModel.Opacity * 255);
                 CardBorder.Background = new SolidColorBrush(color);
                 NoteModel.BackgroundColor = hexColor;
 
@@ -110,6 +110,7 @@ namespace DesktopNotes.Views
                 if (BorderColorMap.TryGetValue(hexColor, out var borderHex))
                 {
                     var borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(borderHex);
+                    borderColor.A = (byte)(NoteModel.Opacity * 255);
                     CardBorder.BorderBrush = new SolidColorBrush(borderColor);
                 }
                 else
@@ -119,13 +120,19 @@ namespace DesktopNotes.Views
                         (byte)(color.R * 0.7),
                         (byte)(color.G * 0.7),
                         (byte)(color.B * 0.7));
+                    borderColor.A = (byte)(NoteModel.Opacity * 255);
                     CardBorder.BorderBrush = new SolidColorBrush(borderColor);
                 }
             }
             catch
             {
-                CardBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xF9, 0xC4));
-                CardBorder.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD0, 0xC0, 0x70));
+                var color = System.Windows.Media.Color.FromRgb(0xFF, 0xF9, 0xC4);
+                color.A = (byte)(NoteModel.Opacity * 255);
+                CardBorder.Background = new SolidColorBrush(color);
+                
+                var borderColor = System.Windows.Media.Color.FromRgb(0xD0, 0xC0, 0x70);
+                borderColor.A = (byte)(NoteModel.Opacity * 255);
+                CardBorder.BorderBrush = new SolidColorBrush(borderColor);
             }
         }
 
@@ -295,6 +302,27 @@ namespace DesktopNotes.Views
             }
         }
 
+        private void CustomColorMenu_Click(object sender, RoutedEventArgs e)
+        {
+            using var colorDialog = new System.Windows.Forms.ColorDialog();
+            
+            try 
+            {
+                var currentColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(NoteModel.BackgroundColor);
+                colorDialog.Color = System.Drawing.Color.FromArgb(currentColor.A, currentColor.R, currentColor.G, currentColor.B);
+            } 
+            catch { }
+
+            if (colorDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                var selectedColor = colorDialog.Color;
+                string hexColor = $"#{selectedColor.R:X2}{selectedColor.G:X2}{selectedColor.B:X2}";
+                ApplyBackgroundColor(hexColor);
+                NoteChanged?.Invoke(this, EventArgs.Empty);
+                ShowSavedIndicator();
+            }
+        }
+
         // --- Opacity ---
 
         private void OpacityMenu_Click(object sender, RoutedEventArgs e)
@@ -304,8 +332,8 @@ namespace DesktopNotes.Views
                 if (double.TryParse(opacityStr, System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out double opacity))
                 {
-                    Opacity = opacity;
                     NoteModel.Opacity = opacity;
+                    ApplyBackgroundColor(NoteModel.BackgroundColor);
                     NoteModel.UpdatedAt = DateTime.Now;
                     NoteChanged?.Invoke(this, EventArgs.Empty);
                     ShowSavedIndicator();

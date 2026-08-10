@@ -1,6 +1,6 @@
 [Setup]
 AppName=Perma Notes
-AppVersion=1.0
+AppVersion=1.1
 AppPublisher=Antigravity
 AppPublisherURL=https://github.com
 DefaultDirName={localappdata}\Programs\Perma Notes
