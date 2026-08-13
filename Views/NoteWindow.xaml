@@ -12,6 +12,7 @@
         WindowStartupLocation="Manual"
         Loaded="Window_Loaded"
         StateChanged="Window_StateChanged"
+        KeyDown="Window_KeyDown"
         ContextMenu="{DynamicResource NoteContextMenu}">
 
     <WindowChrome.WindowChrome>
@@ -21,23 +22,41 @@
     <Window.Resources>
         <!-- Full Context Menu -->
         <ContextMenu x:Key="NoteContextMenu">
-            <!-- Text Editing Commands (Automatically wired to RichTextBox) -->
-            <MenuItem Command="ApplicationCommands.Cut" Header="Cut" />
-            <MenuItem Command="ApplicationCommands.Copy" Header="Copy" />
-            <MenuItem Command="ApplicationCommands.Paste" Header="Paste" />
+            <!-- Context Menu (Reorganized) -->
+            <MenuItem Command="ApplicationCommands.Cut" Header="Cut" InputGestureText="Ctrl+X" />
+            <MenuItem Command="ApplicationCommands.Copy" Header="Copy" InputGestureText="Ctrl+C" />
+            <MenuItem Command="ApplicationCommands.Paste" Header="Paste" InputGestureText="Ctrl+V" />
             <Separator/>
             <MenuItem Header="Format">
-                <MenuItem Command="EditingCommands.ToggleBold" Header="Bold" />
-                <MenuItem Command="EditingCommands.ToggleItalic" Header="Italic" />
-                <MenuItem Command="EditingCommands.ToggleUnderline" Header="Underline" />
+                <MenuItem Command="EditingCommands.ToggleBold" Header="Bold" InputGestureText="Ctrl+B" />
+                <MenuItem Command="EditingCommands.ToggleItalic" Header="Italic" InputGestureText="Ctrl+I" />
+                <MenuItem Command="EditingCommands.ToggleUnderline" Header="Underline" InputGestureText="Ctrl+U" />
+                <MenuItem Header="Strikethrough" Click="StrikethroughText_Click" InputGestureText="Ctrl+Shift+X" />
                 <Separator/>
-                <MenuItem Header="Highlight (Yellow)" Click="HighlightText_Click" />
+                <MenuItem Header="Highlight" Click="HighlightText_Click" InputGestureText="Ctrl+H" />
+                <Separator/>
+                <MenuItem Header="Font Size">
+                    <MenuItem Header="10" Tag="10" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="12" Tag="12" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="14" Tag="14" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="16" Tag="16" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="18" Tag="18" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="20" Tag="20" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="24" Tag="24" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="28" Tag="28" Click="FontSizeMenu_Click" />
+                    <MenuItem Header="32" Tag="32" Click="FontSizeMenu_Click" />
+                </MenuItem>
+            </MenuItem>
+            <MenuItem Header="Insert">
+                <MenuItem Header="Timestamp" Click="InsertTimestamp_Click" InputGestureText="Ctrl+T" />
             </MenuItem>
             <Separator/>
-            <!-- Note Management Commands -->
-            <MenuItem Header="New Note" Click="NewNoteButton_Click"/>
+            <MenuItem Header="New Note" Click="NewNoteButton_Click" InputGestureText="Ctrl+N" />
             <MenuItem Header="Duplicate" Click="DuplicateNote_Click"/>
-            <MenuItem Header="Delete Note" Click="DeleteNoteButton_Click"/>
+            <Separator/>
+            <MenuItem Header="Note Manager" Click="NoteManagerMenu_Click"/>
+            <Separator/>
+            <MenuItem Header="Export as Text File" Click="ExportNoteAsText_Click"/>
             <Separator/>
             <MenuItem Header="Color">
                 <MenuItem Header="Yellow" Click="ColorMenu_Click" Tag="#FFF9C4">
@@ -81,31 +100,73 @@
                 <MenuItem Header="30%" Click="OpacityMenu_Click" Tag="0.30"/>
             </MenuItem>
             <Separator/>
-            <MenuItem x:Name="AlwaysOnTopMenuItem" Header="Always on Top" 
-                      IsCheckable="True" Click="AlwaysOnTopMenu_Click"/>
+            <MenuItem x:Name="AlwaysOnTopMenuItem" Header="Always on Top" IsCheckable="True" Click="AlwaysOnTopMenu_Click"/>
+            <MenuItem x:Name="LockNoteMenuItem" Header="Lock Note" Click="LockNoteButton_Click" InputGestureText="Ctrl+Shift+L"/>
+            <Separator/>
+            <MenuItem Header="Close this Note" Click="CloseNoteMenu_Click"/>
+            <MenuItem Header="Delete Note" Click="DeleteNoteButton_Click"/>
             <Separator/>
             <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
+            <MenuItem Header="Exit PermaNotes" Click="ExitAppMenu_Click"/>
         </ContextMenu>
+
+        <!-- Sleek ScrollBar Style -->
+        <Style x:Key="SleekScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border CornerRadius="3" Background="#40000000" Margin="2,0,2,0" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Track x:Name="PART_Track" IsDirectionReversed="true">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource SleekScrollThumbStyle}" />
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- Header button style (+ ✕ icons) -->
         <Style x:Key="HeaderButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#555555"/>
+            <Setter Property="Foreground" Value="#777777"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Width" Value="28"/>
             <Setter Property="Height" Value="28"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#20000000"/>
+                                <Setter Property="Background" Value="#15000000"/>
+                                <Setter Property="Foreground" Value="#333333"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -113,25 +174,47 @@
             </Setter>
         </Style>
 
-        <!-- Card border style with focus indicator -->
         <Style x:Key="CardBorderStyle" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Style.Triggers>
-                <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                    <Setter Property="BorderThickness" Value="2"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <Style x:Key="FormatToolbarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#55FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="8">
+    <Grid Margin="20">
         <Grid.Effect>
-            <!-- Increase shadow depth when focused -->
-            <DropShadowEffect x:Name="WindowShadow" BlurRadius="10" ShadowDepth="2" Direction="270" Color="#50000000" Opacity="0.5"/>
+            <!-- Soft, expansive shadow for modern floating look -->
+            <DropShadowEffect x:Name="WindowShadow" BlurRadius="25" ShadowDepth="4" Direction="270" Color="Black" Opacity="0.15"/>
         </Grid.Effect>
 
-        <Border x:Name="CardBorder" Background="#FFF9C4" BorderBrush="#D0C070" Style="{StaticResource CardBorderStyle}">
+        <Border x:Name="CardBorder" Background="#FFF9C4" BorderBrush="Transparent" Style="{StaticResource CardBorderStyle}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="36"/>
@@ -139,10 +222,14 @@
                 </Grid.RowDefinitions>
 
                 <!-- Header / Drag Bar -->
-                <Grid Grid.Row="0" x:Name="HeaderGrid" Background="#18000000" 
-                      MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid Grid.Row="0" x:Name="HeaderGrid" Background="Transparent" 
+                      MouseLeftButtonDown="Header_MouseLeftButtonDown"
+                      Margin="4,4,4,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
@@ -150,29 +237,29 @@
 
                     <!-- Title: TextBlock by default, TextBox on double-click -->
                     <TextBlock x:Name="TitleBlock" Grid.Column="0" 
-                               Margin="10,0,0,0" 
+                               Margin="12,0,0,0" 
                                VerticalAlignment="Center" 
+                               FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI"
                                FontWeight="SemiBold" 
-                               FontSize="13" 
-                               Foreground="#333333"
+                               FontSize="14" 
+                               Foreground="#444444"
                                TextTrimming="CharacterEllipsis"
                                MouseLeftButtonDown="TitleBlock_MouseLeftButtonDown"/>
 
                     <TextBox x:Name="TitleEditBox" Grid.Column="0" 
-                             Margin="8,2,4,2" 
+                             Margin="10,2,4,2" 
                              VerticalAlignment="Center" 
+                             FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI"
                              FontWeight="SemiBold" 
-                             FontSize="13" 
+                             FontSize="14" 
                              Foreground="#333333" 
                              Background="#30FFFFFF" 
-                             BorderThickness="1"
-                             BorderBrush="#80000000"
-                             Padding="2,1"
+                             BorderThickness="0"
+                             Padding="4,2"
                              Visibility="Collapsed"
                              LostFocus="TitleEditBox_LostFocus"
                              KeyDown="TitleEditBox_KeyDown"/>
 
-                    <!-- Saved Indicator -->
                     <TextBlock x:Name="SavedIndicator" Grid.Column="1" 
                                Text="Saved" 
                                VerticalAlignment="Center" 
@@ -181,29 +268,106 @@
                                Margin="0,0,8,0"
                                Opacity="0"/>
 
-                    <Button x:Name="NewNoteBtn" Grid.Column="2" Content="+" Style="{StaticResource HeaderButtonStyle}" 
-                            ToolTip="New Note" Click="NewNoteButton_Click" Margin="0,0,4,0"/>
+                    <Button x:Name="LockNoteBtn" Grid.Column="2" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="Lock Note" Click="LockNoteButton_Click" Margin="0,0,2,0">
+                        <Path x:Name="LockIconPath" Data="M 19 9 L 5 9 C 3.9 9 3 9.9 3 11 L 3 20 C 3 21.1 3.9 22 5 22 L 19 22 C 20.1 22 21 21.1 21 20 L 21 11 C 21 9.9 20.1 9 19 9 Z M 10 9 L 10 6 C 10 2.7 7.3 0 4 0 C 0.7 0 -2 2.7 -2 6 L -2 15 C -2 16.1 -0.9 17 0 17 C 0.9 17 2 16.1 2 15 L 2 6 C 2 4.9 2.9 4 4 4 C 5.1 4 6 4.9 6 6 L 6 9 Z M 12 17 A 1.5 1.5 0 0 0 12.75 14.33 L 12.75 12 A 0.75 0.75 0 0 0 11.25 12 L 11.25 14.33 A 1.5 1.5 0 0 0 12 17 Z" 
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+                              Stretch="Uniform" Width="13" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
 
-                    <Button x:Name="DeleteNoteBtn" Grid.Column="3" Content="✕" Style="{StaticResource HeaderButtonStyle}" 
-                            ToolTip="Delete Note" Click="DeleteNoteButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="NewNoteBtn" Grid.Column="3" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="New Note" Click="NewNoteButton_Click" Margin="0,0,2,0">
+                        <Path Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H10v-2H6V4h7v5h5v3h2V8l-6-6zM18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3h-2z" 
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+                              Stretch="Uniform" Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+
+                    <Button x:Name="SearchNoteBtn" Grid.Column="4" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="Search Notes" Click="SearchNoteButton_Click" Margin="0,0,2,0">
+                        <Path Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H11v-2H6V4h7v5h5v4h2V8l-6-6zM15.5 15c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5c.71 0 1.37-.23 1.9-.61l2.69 2.69 1.41-1.41-2.69-2.69c.38-.53.61-1.19.61-1.9 0-1.93-1.57-3.5-3.5-3.5zm0 5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" 
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+                              Stretch="Uniform" Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+
+                    <Button x:Name="DeleteNoteBtn" Grid.Column="5" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="Delete Note" Click="DeleteNoteButton_Click" Margin="0,0,2,0">
+                        <Path Data="M 9 3 L 9 4 L 4 4 L 4 6 L 5 6 L 5 20 C 5 21.104569 5.8954305 22 7 22 L 17 22 C 18.104569 22 19 21.104569 19 20 L 19 6 L 20 6 L 20 4 L 15 4 L 15 3 C 15 1.8954305 14.104569 1 13 1 L 11 1 C 9.8954305 1 9 1.8954305 9 3 z M 11 3 L 13 3 L 13 4 L 11 4 L 11 3 z M 7 6 L 17 6 L 17 20 L 7 20 L 7 6 z M 9 8 L 11 8 L 11 18 L 9 18 L 9 8 z M 13 8 L 15 8 L 15 18 L 13 18 L 13 8 z" 
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+                              Stretch="Uniform" Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+
+                    <Button x:Name="CloseNoteBtn" Grid.Column="6" Content="✕" Style="{StaticResource HeaderButtonStyle}" 
+                            ToolTip="Close Note" Click="CloseNoteButton_Click" Margin="0,0,6,0"/>
                 </Grid>
 
                 <!-- Rich Text Content Editor -->
                 <RichTextBox x:Name="ContentRichTextBox" Grid.Row="1" 
-                             Margin="8" 
+                             Margin="16,4,16,16" 
                              AcceptsReturn="True" 
                              AcceptsTab="True" 
                              VerticalScrollBarVisibility="Auto" 
+                             ScrollViewer.CanContentScroll="False"
                              Background="Transparent" 
                              BorderThickness="0" 
-                             FontSize="14" 
-                             Foreground="#222222" 
-                             FontFamily="Segoe UI"
+                             FontSize="15" 
+                             Foreground="#333333" 
+                             FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI"
                              Cursor="Arrow"
+                             PreviewMouseUp="ContentRichTextBox_PreviewMouseUp"
+                             SelectionChanged="ContentRichTextBox_SelectionChanged"
                              TextChanged="ContentRichTextBox_TextChanged"
                              ContextMenu="{DynamicResource NoteContextMenu}">
                 </RichTextBox>
             </Grid>
         </Border>
+
+        <!-- Formatting Popup -->
+        <Popup x:Name="FormatPopup" AllowsTransparency="True" StaysOpen="False" Placement="MousePoint" HorizontalOffset="-30" VerticalOffset="-40">
+            <Border Background="#DD1A1A1A" CornerRadius="8" BorderBrush="#555555" BorderThickness="1" Padding="4">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.4" Direction="270"/>
+                </Border.Effect>
+                <StackPanel Orientation="Horizontal">
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Command="EditingCommands.ToggleBold" CommandTarget="{Binding ElementName=ContentRichTextBox}" ToolTip="Bold">
+                        <TextBlock Text="B" FontWeight="Bold" FontSize="14" Foreground="White" Margin="0,0,0,1"/>
+                    </Button>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Command="EditingCommands.ToggleItalic" CommandTarget="{Binding ElementName=ContentRichTextBox}" ToolTip="Italic">
+                        <TextBlock Text="I" FontStyle="Italic" FontSize="14" FontFamily="Georgia" Foreground="White"/>
+                    </Button>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Command="EditingCommands.ToggleUnderline" CommandTarget="{Binding ElementName=ContentRichTextBox}" ToolTip="Underline">
+                        <TextBlock Text="U" TextDecorations="Underline" FontSize="14" Foreground="White" Margin="0,0,0,1"/>
+                    </Button>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="StrikethroughText_Click" ToolTip="Strikethrough (Ctrl+Shift+X)">
+                        <TextBlock Text="S" TextDecorations="Strikethrough" FontSize="14" Foreground="White" Margin="0,0,0,1"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="HighlightText_Click" ToolTip="Highlight (Ctrl+H)">
+                        <Path Data="M3 14 L3 17 L6 17 L17.5 5.5 L14.5 2.5 Z M14.5 5.5 L6 14" Fill="White" Stretch="Uniform" Width="12" Height="12"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Command="EditingCommands.ToggleBullets" CommandTarget="{Binding ElementName=ContentRichTextBox}" ToolTip="Bullet List">
+                        <Path Data="M3 4 A 1.5 1.5 0 1 1 3 7 A 1.5 1.5 0 0 1 3 4 Z M8 5 L18 5 L18 6 L8 6 Z M3 11 A 1.5 1.5 0 1 1 3 14 A 1.5 1.5 0 0 1 3 11 Z M8 12 L18 12 L18 13 L8 13 Z" Fill="White" Stretch="Uniform" Width="12" Height="12"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="IncreaseFontSize_Click" ToolTip="Increase Font Size">
+                        <TextBlock Text="A↑" FontSize="12" Foreground="White"/>
+                    </Button>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="DecreaseFontSize_Click" ToolTip="Decrease Font Size">
+                        <TextBlock Text="A↓" FontSize="12" Foreground="White"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Command="ApplicationCommands.Undo" CommandTarget="{Binding ElementName=ContentRichTextBox}" ToolTip="Undo (Ctrl+Z)">
+                        <TextBlock Text="↶" FontSize="16" Foreground="White" Margin="0,-2,0,0"/>
+                    </Button>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Command="ApplicationCommands.Redo" CommandTarget="{Binding ElementName=ContentRichTextBox}" ToolTip="Redo (Ctrl+Y)">
+                        <TextBlock Text="↷" FontSize="16" Foreground="White" Margin="0,-2,0,0"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="InsertTimestamp_Click" ToolTip="Insert Timestamp (Ctrl+T)">
+                        <TextBlock Text="🕐" FontSize="12" Foreground="White"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

@@ -30,8 +30,10 @@ Source: "dist\PermaNotes.exe"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\Perma Notes"; Filename: "{app}\PermaNotes.exe"
 Name: "{autodesktop}\Perma Notes"; Filename: "{app}\PermaNotes.exe"; Tasks: desktopicon
-; Add to Startup folder if the user checks the task
-Name: "{userstartup}\Perma Notes"; Filename: "{app}\PermaNotes.exe"; Tasks: startup
+
+[Registry]
+; Write to the same Run key the app's StartupService uses to prevent duplicate entries in Task Manager
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "PermaNotes"; ValueData: "{app}\PermaNotes.exe"; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
 Filename: "{app}\PermaNotes.exe"; Description: "{cm:LaunchProgram,Perma Notes}"; Flags: nowait postinstall skipifsilent

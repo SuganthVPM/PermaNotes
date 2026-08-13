@@ -10,12 +10,12 @@ namespace DesktopNotes.Views
 {
     public partial class SearchWindow : Window
     {
-        private readonly IEnumerable<NoteWindow> _allNoteWindows;
+        private readonly IEnumerable<Note> _allNotes;
 
-        public SearchWindow(IEnumerable<NoteWindow> allNoteWindows)
+        public SearchWindow(IEnumerable<Note> allNotes)
         {
             InitializeComponent();
-            _allNoteWindows = allNoteWindows;
+            _allNotes = allNotes;
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -33,9 +33,8 @@ namespace DesktopNotes.Views
         private void FilterNotes(string query)
         {
             var results = new List<SearchResultItem>();
-            foreach (var win in _allNoteWindows)
+            foreach (var note in _allNotes)
             {
-                var note = win.NoteModel;
                 string title = note.Title ?? "";
                 string text = note.Text ?? "";
                 
@@ -45,7 +44,7 @@ namespace DesktopNotes.Views
                 {
                     results.Add(new SearchResultItem
                     {
-                        NoteWindow = win,
+                        NoteModel = note,
                         Title = title,
                         Snippet = text.Replace("\r", " ").Replace("\n", " ")
                     });
@@ -58,14 +57,11 @@ namespace DesktopNotes.Views
         {
             if (ResultsList.SelectedItem is SearchResultItem item)
             {
-                // Bring the note to front
-                if (!item.NoteWindow.IsVisible) item.NoteWindow.Show();
-                if (item.NoteWindow.WindowState == WindowState.Minimized) item.NoteWindow.WindowState = WindowState.Normal;
-                item.NoteWindow.Activate();
-                item.NoteWindow.Topmost = true;
-                item.NoteWindow.Topmost = item.NoteWindow.NoteModel.IsAlwaysOnTop; // revert to its original topmost state
-                
-                // Add temporary highlight effect if needed (e.g. animate opacity)
+                // Delegate activation to the main app instance which can handle closed vs open states
+                if (System.Windows.Application.Current is App app)
+                {
+                    app.ActivateNote(item.NoteModel);
+                }
                 
                 Close();
             }
@@ -73,7 +69,7 @@ namespace DesktopNotes.Views
 
         public class SearchResultItem
         {
-            public NoteWindow NoteWindow { get; set; } = null!;
+            public Note NoteModel { get; set; } = null!;
             public string Title { get; set; } = "";
             public string Snippet { get; set; } = "";
         }

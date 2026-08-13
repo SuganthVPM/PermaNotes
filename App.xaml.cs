@@ -27,6 +27,7 @@ namespace DesktopNotes
 
         // --- State ---
         private Mutex? _singleInstanceMutex;
+        private readonly List<Note> _allNotes = new();
         private readonly List<NoteWindow> _activeNoteWindows = new();
         private readonly NoteStorageService _storageService = new();
         private readonly DesktopWindowService _desktopWindowService = new();
@@ -134,11 +135,17 @@ namespace DesktopNotes
                 _storageService.SaveNotesImmediate(savedNotes);
             }
 
-            ValidateNotePositions(savedNotes);
+            _allNotes.Clear();
+            _allNotes.AddRange(savedNotes);
 
-            foreach (var note in savedNotes)
+            ValidateNotePositions(_allNotes);
+
+            foreach (var note in _allNotes)
             {
-                CreateNoteWindowInstance(note);
+                if (!note.IsClosed)
+                {
+                    CreateNoteWindowInstance(note);
+                }
             }
         }
 
@@ -171,15 +178,19 @@ namespace DesktopNotes
 
             // Note actions
             window.RequestNewNote += (s, _) => SpawnNewNote(window);
+            window.RequestSearch += (s, _) => OpenSearch();
+            window.RequestCloseNote += (s, w) => CloseNoteWindow(w);
             window.RequestDeleteNote += (s, w) => DeleteNoteWindow(w);
-            window.RequestDuplicateNote += (s, clone) => CreateNoteWindowInstance(clone);
+            window.RequestDuplicateNote += (s, clone) => SpawnDuplicateNote(clone);
             window.RequestSettings += (s, _) => OpenSettings();
+            window.RequestExitApp += (s, _) => ExitApp();
+            window.RequestNoteManager += (s, _) => Dispatcher.Invoke(OpenNoteManager);
 
             _activeNoteWindows.Add(window);
             window.Show();
         }
 
-        private void SpawnNewNote(NoteWindow? sourceWindow = null)
+        internal void SpawnNewNote(NoteWindow? sourceWindow = null)
         {
             var settings = AppSettings.Load();
             var newNote = new Note
@@ -193,12 +204,29 @@ namespace DesktopNotes
                 BackgroundColor = settings.DefaultNoteColor,
                 Opacity = settings.DefaultOpacity
             };
+            _allNotes.Add(newNote);
             CreateNoteWindowInstance(newNote);
             OnNotesStateChanged();
         }
 
-        private void DeleteNoteWindow(NoteWindow window)
+        private void SpawnDuplicateNote(Note clone)
         {
+            _allNotes.Add(clone);
+            CreateNoteWindowInstance(clone);
+            OnNotesStateChanged();
+        }
+
+        internal void CloseNoteWindow(NoteWindow window)
+        {
+            window.NoteModel.IsClosed = true;
+            _activeNoteWindows.Remove(window);
+            window.Close();
+            OnNotesStateChanged();
+        }
+
+        internal void DeleteNoteWindow(NoteWindow window)
+        {
+            _allNotes.Remove(window.NoteModel);
             _activeNoteWindows.Remove(window);
             window.Close();
             OnNotesStateChanged();
@@ -207,6 +235,19 @@ namespace DesktopNotes
 
         private void ShowAllNotes()
         {
+            bool changed = false;
+            foreach (var note in _allNotes)
+            {
+                if (note.IsClosed)
+                {
+                    note.IsClosed = false;
+                    CreateNoteWindowInstance(note);
+                    changed = true;
+                }
+            }
+            
+            if (changed) OnNotesStateChanged();
+
             if (_activeNoteWindows.Count == 0)
             {
                 SpawnNewNote();
@@ -228,10 +269,9 @@ namespace DesktopNotes
 
         // ===================== PERSISTENCE =====================
 
-        private void OnNotesStateChanged()
+        internal void OnNotesStateChanged()
         {
-            var allNotes = _activeNoteWindows.Select(w => w.NoteModel).ToList();
-            _storageService.SaveNotesDebounced(allNotes);
+            _storageService.SaveNotesDebounced(_allNotes);
         }
 
         // ===================== MULTI-MONITOR VALIDATION =====================
@@ -285,20 +325,33 @@ namespace DesktopNotes
                 ContextMenuStrip = new ContextMenuStrip()
             };
 
-            _trayIcon.ContextMenuStrip.Items.Add("New Note", null, (s, e) => Dispatcher.Invoke(() => SpawnNewNote()));
-            _trayIcon.ContextMenuStrip.Items.Add("Search Notes", null, (s, e) => Dispatcher.Invoke(OpenSearch));
-            _trayIcon.ContextMenuStrip.Items.Add("Show All Notes", null, (s, e) => Dispatcher.Invoke(ShowAllNotes));
-            _trayIcon.ContextMenuStrip.Items.Add("Hide All Notes", null, (s, e) => Dispatcher.Invoke(HideAllNotes));
-            _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
-            _trayIcon.ContextMenuStrip.Items.Add("Settings", null, (s, e) => Dispatcher.Invoke(OpenSettings));
-            _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
-            _trayIcon.ContextMenuStrip.Items.Add("Export Notes", null, (s, e) => Dispatcher.Invoke(ExportNotes));
-            _trayIcon.ContextMenuStrip.Items.Add("Import Notes", null, (s, e) => Dispatcher.Invoke(ImportNotes));
-            _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
-            _trayIcon.ContextMenuStrip.Items.Add("Exit", null, (s, e) => Dispatcher.Invoke(ExitApp));
-
+            _trayIcon.ContextMenuStrip.Opening += TrayContextMenu_Opening;
             _trayIcon.DoubleClick += (s, e) => Dispatcher.Invoke(ShowAllNotes);
         }
+
+        private void TrayContextMenu_Opening(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (_trayIcon?.ContextMenuStrip == null) return;
+            var menu = _trayIcon.ContextMenuStrip;
+            menu.Items.Clear();
+
+            menu.Items.Add("New Note", null, (s, ev) => Dispatcher.Invoke(() => SpawnNewNote()));
+            menu.Items.Add("Note Manager", null, (s, ev) => Dispatcher.Invoke(OpenNoteManager));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Show All Notes", null, (s, ev) => Dispatcher.Invoke(ShowAllNotes));
+            menu.Items.Add("Hide All Notes", null, (s, ev) => Dispatcher.Invoke(HideAllNotes));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Settings", null, (s, ev) => Dispatcher.Invoke(OpenSettings));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Exit", null, (s, ev) => Dispatcher.Invoke(ExitApp));
+        }
+
+        private void OpenNoteManager()
+        {
+            var managerWindow = new NoteManagerWindow(this, _allNotes);
+            managerWindow.Show();
+        }
+
 
         private void OpenSettings()
         {
@@ -328,9 +381,29 @@ namespace DesktopNotes
 
         private void OpenSearch()
         {
-            var searchWindow = new SearchWindow(_activeNoteWindows);
+            var searchWindow = new SearchWindow(_allNotes);
             searchWindow.Show();
             searchWindow.Activate();
+        }
+
+        public void ActivateNote(Note note)
+        {
+            if (note.IsClosed)
+            {
+                note.IsClosed = false;
+                CreateNoteWindowInstance(note);
+                OnNotesStateChanged();
+            }
+            
+            var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel == note);
+            if (window != null)
+            {
+                if (!window.IsVisible) window.Show();
+                if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+                window.Activate();
+                window.Topmost = true;
+                window.Topmost = window.NoteModel.IsAlwaysOnTop; // revert to original topmost state
+            }
         }
 
         private void ExportNotes()
@@ -390,10 +463,12 @@ namespace DesktopNotes
                             {
                                 // Generate new ID to avoid conflicts
                                 note.Id = Guid.NewGuid();
+                                note.IsClosed = false;
                                 // Offset slightly so they don't exactly overlap existing notes
                                 note.X += 20;
                                 note.Y += 20;
                                 
+                                _allNotes.Add(note);
                                 CreateNoteWindowInstance(note);
                             }
                             OnNotesStateChanged();
@@ -517,8 +592,7 @@ namespace DesktopNotes
         private void ExitApp()
         {
             // Save all notes immediately
-            var allNotes = _activeNoteWindows.Select(w => w.NoteModel).ToList();
-            _storageService.SaveNotesImmediate(allNotes);
+            _storageService.SaveNotesImmediate(_allNotes);
 
             // Cleanup
             try

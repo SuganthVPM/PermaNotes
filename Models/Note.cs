@@ -15,6 +15,8 @@ namespace DesktopNotes.Models
         public string BackgroundColor { get; set; } = "#FFF9C4"; // Soft sticky-note yellow
         public double Opacity { get; set; } = 1.0;
         public bool IsAlwaysOnTop { get; set; } = false;
+        public bool IsClosed { get; set; } = false;
+        public bool IsLocked { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
     }

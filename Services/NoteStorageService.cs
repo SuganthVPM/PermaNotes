@@ -286,6 +286,8 @@ namespace DesktopNotes.Services
                     BackgroundColor = n.BackgroundColor,
                     Opacity = n.Opacity,
                     IsAlwaysOnTop = n.IsAlwaysOnTop,
+                    IsClosed = n.IsClosed,
+                    IsLocked = n.IsLocked,
                     CreatedAt = n.CreatedAt,
                     UpdatedAt = n.UpdatedAt
                 });
