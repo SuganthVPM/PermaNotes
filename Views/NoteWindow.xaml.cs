@@ -10,24 +10,71 @@ using DesktopNotes.Models;
 
 namespace DesktopNotes.Views
 {
+    /// <summary>
+    /// The main sticky-note window. Each instance corresponds to one <see cref="Note"/> model.
+    ///
+    /// Responsibilities:
+    ///  - Rendering a note card (title, rich text content, header buttons).
+    ///  - Drag-to-move and resize-tracking (persists X/Y/Width/Height to the model).
+    ///  - Rich text formatting: Bold, Italic, Underline, Strikethrough, Highlight (toggle),
+    ///    Font Size (absolute via menu + relative ±2 via toolbar), Insert Timestamp.
+    ///  - Context menu interactions: forwarded to App.xaml.cs via events.
+    ///  - Keyboard shortcuts: Ctrl+H (highlight), Ctrl+Shift+L (lock), Ctrl+Shift+X (strikethrough),
+    ///    Ctrl+T (timestamp), Ctrl+N (new note).
+    ///  - Floating format popup: appears on text selection, dismissed on collapse.
+    ///  - Lock mode: disables all editing when <see cref="Note.IsLocked"/> is true.
+    ///  - Adaptive contrast: text/icon colors flip to white on dark note backgrounds.
+    ///
+    /// All cross-window actions (new note, delete, close, settings, etc.) are surfaced as
+    /// events and handled centrally in <see cref="App"/>.
+    /// </summary>
     public partial class NoteWindow : Window
     {
+        /// <summary>The data model this window represents.</summary>
         public Note NoteModel { get; private set; }
 
+        // --- Events raised to App.xaml.cs for cross-window coordination ---
+
+        /// <summary>Raised whenever note content, position, or metadata changes. Triggers debounced save.</summary>
         public event EventHandler? NoteChanged;
+
+        /// <summary>Raised when the Always-on-Top toggle changes, so App can detach/attach the desktop owner.</summary>
         public event EventHandler? AlwaysOnTopChanged;
+
+        /// <summary>Raised when the user requests a new blank note (toolbar button or Ctrl+N).</summary>
         public event EventHandler? RequestNewNote;
+
+        /// <summary>Raised when the user opens the Search Notes panel.</summary>
         public event EventHandler? RequestSearch;
+
+        /// <summary>Raised when the user opens the Note Manager window (context menu → Note Manager).</summary>
         public event EventHandler? RequestNoteManager;
+
+        /// <summary>Raised when the user closes this note (hides it, marks IsClosed=true).</summary>
         public event EventHandler<NoteWindow>? RequestCloseNote;
+
+        /// <summary>Raised when the user permanently deletes this note.</summary>
         public event EventHandler<NoteWindow>? RequestDeleteNote;
+
+        /// <summary>Raised when the user duplicates this note. Carries the pre-cloned <see cref="Note"/> object.</summary>
         public event EventHandler<Note>? RequestDuplicateNote;
+
+        /// <summary>Raised when the user opens the Settings dialog.</summary>
         public event EventHandler? RequestSettings;
+
+        /// <summary>Raised when the user chooses Exit from the context menu.</summary>
         public event EventHandler? RequestExitApp;
 
+        /// <summary>
+        /// Suppresses change-tracking callbacks during initial data load so that
+        /// restoring RTF content doesn't immediately trigger a save.
+        /// </summary>
         private bool _isInitializing = true;
 
-        // Border colors matched to note background colors
+        /// <summary>
+        /// Maps each preset note background hex colour to a darker border colour
+        /// that complements it. Colours not in this map get a generic 30%-darkened border.
+        /// </summary>
         private static readonly Dictionary<string, string> BorderColorMap = new(StringComparer.OrdinalIgnoreCase)
         {
             { "#FFF9C4", "#D0C070" }, // Yellow
@@ -41,11 +88,16 @@ namespace DesktopNotes.Views
             { "#E0E0E0", "#A0A0A0" }, // Gray
         };
 
+        /// <summary>
+        /// Initializes a new <see cref="NoteWindow"/> for the given <paramref name="note"/>.
+        /// UI data-binding and color/lock state are applied in <see cref="Window_Loaded"/>.
+        /// </summary>
         public NoteWindow(Note note)
         {
             InitializeComponent();
             NoteModel = note;
         }
+
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
@@ -263,6 +315,14 @@ namespace DesktopNotes.Views
 
         // --- Content editing (RichText) ---
 
+        /// <summary>
+        /// Toggles highlight on the current text selection.
+        /// Uses <see cref="IsSelectionHighlighted"/> to walk individual <see cref="Inline"/> runs,
+        /// which avoids the unreliable <c>GetPropertyValue</c> behaviour on mixed-formatting selections.
+        /// - If any run in the selection has a non-transparent background → removes highlight.
+        /// - Otherwise → applies solid yellow with forced dark foreground for legibility.
+        /// Shortcut: Ctrl+H. Also available in the Format popup toolbar and context menu.
+        /// </summary>
         private void HighlightText_Click(object sender, RoutedEventArgs e)
         {
             if (ContentRichTextBox.Selection.IsEmpty) return;
@@ -286,6 +346,12 @@ namespace DesktopNotes.Views
             ContentRichTextBox_TextChanged(this, null!);
         }
 
+        /// <summary>
+        /// Toggles strikethrough on the current text selection.
+        /// Preserves any existing text decorations (e.g. underline) by rebuilding the
+        /// <see cref="TextDecorationCollection"/> rather than replacing it wholesale.
+        /// Shortcut: Ctrl+Shift+X. Also available in the Format popup and context menu.
+        /// </summary>
         private void StrikethroughText_Click(object sender, RoutedEventArgs e)
         {
             if (ContentRichTextBox.Selection.IsEmpty) return;
@@ -336,6 +402,10 @@ namespace DesktopNotes.Views
             ContentRichTextBox_TextChanged(this, null!);
         }
 
+        /// <summary>
+        /// Sets an absolute font size on the current selection via the Font Size context sub-menu.
+        /// The target size is stored in the <c>Tag</c> property of the <see cref="MenuItem"/>.
+        /// </summary>
         private void FontSizeMenu_Click(object sender, RoutedEventArgs e)
         {
             if (sender is MenuItem mi && int.TryParse(mi.Tag?.ToString(), out int size))
@@ -345,6 +415,11 @@ namespace DesktopNotes.Views
             }
         }
 
+        /// <summary>
+        /// Increases the font size of selected text by 2pt.
+        /// Reads the current size from <see cref="TextElement.FontSizeProperty"/>.
+        /// No-ops when nothing is selected.
+        /// </summary>
         private void IncreaseFontSize_Click(object sender, RoutedEventArgs e)
         {
             if (ContentRichTextBox.Selection.IsEmpty) return;
@@ -356,6 +431,10 @@ namespace DesktopNotes.Views
             }
         }
 
+        /// <summary>
+        /// Decreases the font size of selected text by 2pt, with a minimum of 4pt.
+        /// No-ops when nothing is selected.
+        /// </summary>
         private void DecreaseFontSize_Click(object sender, RoutedEventArgs e)
         {
             if (ContentRichTextBox.Selection.IsEmpty) return;
@@ -367,6 +446,10 @@ namespace DesktopNotes.Views
             }
         }
 
+        /// <summary>
+        /// Inserts the current date and time (format: <c>yyyy-MM-dd HH:mm</c>) at the caret position.
+        /// Shortcut: Ctrl+T. Also available in the Insert context sub-menu and format popup toolbar.
+        /// </summary>
         private void InsertTimestamp_Click(object sender, RoutedEventArgs e)
         {
             var timeString = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
@@ -376,6 +459,15 @@ namespace DesktopNotes.Views
             ContentRichTextBox_TextChanged(this, null!);
         }
 
+        /// <summary>
+        /// Walks each <see cref="TextPointer"/> in the current selection and returns <c>true</c>
+        /// if any <see cref="Inline"/> or <see cref="Paragraph"/> element has a non-transparent
+        /// <see cref="SolidColorBrush"/> background.
+        /// <para>
+        /// Using <c>TextSelection.GetPropertyValue</c> alone is unreliable for mixed-format selections
+        /// (e.g. text loaded from RTF), so we scan individual runs instead.
+        /// </para>
+        /// </summary>
         private bool IsSelectionHighlighted()
         {
             // Walk through the text elements in the selection to check if any have a non-transparent background
@@ -478,6 +570,18 @@ namespace DesktopNotes.Views
             NoteChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>
+        /// Handles window-level keyboard shortcuts that must intercept input before the
+        /// <see cref="System.Windows.Controls.RichTextBox"/> processes it.
+        /// <list type="table">
+        ///   <listheader><term>Key</term><description>Action</description></listheader>
+        ///   <item><term>Ctrl+H</term><description>Toggle highlight on selection</description></item>
+        ///   <item><term>Ctrl+Shift+L</term><description>Toggle note lock</description></item>
+        ///   <item><term>Ctrl+Shift+X</term><description>Toggle strikethrough on selection</description></item>
+        ///   <item><term>Ctrl+T</term><description>Insert timestamp at caret</description></item>
+        ///   <item><term>Ctrl+N</term><description>Create a new note</description></item>
+        /// </list>
+        /// </summary>
         private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
             if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)

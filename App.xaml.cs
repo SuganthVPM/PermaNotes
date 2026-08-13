@@ -17,23 +17,66 @@ using MessageBox = System.Windows.MessageBox;
 
 namespace DesktopNotes
 {
+    /// <summary>
+    /// Application entry point and central controller for PermaNotes.
+    ///
+    /// Responsibilities:
+    ///  - Single-instance enforcement via a named <see cref="Mutex"/>.
+    ///  - System tray icon: New Note, Note Manager, Show/Hide All, Settings, Exit.
+    ///  - Global hotkey registration (Ctrl+Alt+N → new note, Ctrl+Alt+S → search).
+    ///  - Note lifecycle: create, close (hide), delete, duplicate, show-all.
+    ///  - Note Manager: <see cref="OpenNoteManager"/> creates a <see cref="NoteManagerWindow"/>.
+    ///  - Desktop integration: attaches note windows to the WorkerW layer so they
+    ///    remain visible during Win+D (Show Desktop) but sit behind normal windows.
+    ///  - Explorer restart detection: re-attaches windows when Taskbar is restarted.
+    ///  - Periodic memory trimming (every 60 s) to reduce working-set size.
+    ///  - Debounced, atomic JSON persistence via <see cref="NoteStorageService"/>.
+    ///  - Multi-monitor guard: notes that end up off-screen are moved to the primary monitor.
+    ///  - Log rotation at 512 KB.
+    /// </summary>
     public partial class App : Application
     {
         // --- Constants ---
+
+        /// <summary>Named mutex that guarantees only one PermaNotes process runs at a time.</summary>
         private const string MutexName = "DesktopNotes_SingleInstance_F7A2B";
+
+        /// <summary>Win32 hotkey ID for Ctrl+Alt+N (create new note globally).</summary>
         private const int HOTKEY_ID_NEW_NOTE = 9001;
+
+        /// <summary>Win32 hotkey ID for Ctrl+Alt+S (open search globally).</summary>
         private const int HOTKEY_ID_SEARCH = 9002;
-        private const long MAX_LOG_SIZE = 512 * 1024; // 512 KB
+
+        /// <summary>Maximum trace log size before rotation — 512 KB.</summary>
+        private const long MAX_LOG_SIZE = 512 * 1024;
 
         // --- State ---
+
+        /// <summary>Held for the process lifetime; released on clean exit to allow a future restart.</summary>
         private Mutex? _singleInstanceMutex;
+
+        /// <summary>Master list of all notes (open and closed). Persisted to disk on every change.</summary>
         private readonly List<Note> _allNotes = new();
+
+        /// <summary>Currently visible <see cref="NoteWindow"/> instances, in creation order.</summary>
         private readonly List<NoteWindow> _activeNoteWindows = new();
+
+        /// <summary>Handles debounced, atomic JSON writes to the storage directory.</summary>
         private readonly NoteStorageService _storageService = new();
+
+        /// <summary>Manages the Progman/WorkerW shell attachment that keeps notes on the desktop layer.</summary>
         private readonly DesktopWindowService _desktopWindowService = new();
+
+        /// <summary>Windows system tray (notification area) icon.</summary>
         private NotifyIcon? _trayIcon;
+
+        /// <summary>Hidden message-only window used to receive WM_HOTKEY messages from Win32.</summary>
         private HwndSource? _hotkeyHwndSource;
+
+        /// <summary>Registered message ID for the "TaskbarCreated" broadcast (Explorer restart detection).</summary>
         private uint _taskbarCreatedMessageId;
+
+        /// <summary>Fires every 60 s to trim the process working-set and encourage GC.</summary>
         private System.Timers.Timer? _memoryTimer;
 
         // --- Logging ---
@@ -41,6 +84,10 @@ namespace DesktopNotes
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNotes");
         private static readonly string TraceLogPath = Path.Combine(LogDir, "app_trace.log");
 
+        /// <summary>
+        /// Sets <see cref="ShutdownMode.OnExplicitShutdown"/> so the app stays alive
+        /// even when all note windows are closed (tray icon keeps it running).
+        /// </summary>
         public App()
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -190,6 +237,11 @@ namespace DesktopNotes
             window.Show();
         }
 
+        /// <summary>
+        /// Spawns a new blank note and opens its window.
+        /// Positioned offset from <paramref name="sourceWindow"/> (or a default location if null).
+        /// The new note uses default colour and opacity from <see cref="AppSettings"/>.
+        /// </summary>
         internal void SpawnNewNote(NoteWindow? sourceWindow = null)
         {
             var settings = AppSettings.Load();
@@ -216,6 +268,11 @@ namespace DesktopNotes
             OnNotesStateChanged();
         }
 
+        /// <summary>
+        /// Hides a note window and marks the model as closed (<c>IsClosed = true</c>).
+        /// The note is NOT deleted — it remains in <see cref="_allNotes"/> and can be
+        /// reopened via <see cref="ActivateNote"/> or the Note Manager.
+        /// </summary>
         internal void CloseNoteWindow(NoteWindow window)
         {
             window.NoteModel.IsClosed = true;
@@ -224,6 +281,10 @@ namespace DesktopNotes
             OnNotesStateChanged();
         }
 
+        /// <summary>
+        /// Permanently removes a note: closes its window, removes it from <see cref="_allNotes"/>,
+        /// and triggers a save. The app continues running via the tray icon.
+        /// </summary>
         internal void DeleteNoteWindow(NoteWindow window)
         {
             _allNotes.Remove(window.NoteModel);
@@ -269,6 +330,10 @@ namespace DesktopNotes
 
         // ===================== PERSISTENCE =====================
 
+        /// <summary>
+        /// Triggers a debounced save of all notes to disk via <see cref="NoteStorageService"/>.
+        /// Called after every state-changing operation (content edit, position change, delete, etc.).
+        /// </summary>
         internal void OnNotesStateChanged()
         {
             _storageService.SaveNotesDebounced(_allNotes);
@@ -346,6 +411,9 @@ namespace DesktopNotes
             menu.Items.Add("Exit", null, (s, ev) => Dispatcher.Invoke(ExitApp));
         }
 
+        /// <summary>
+        /// Opens the <see cref="NoteManagerWindow"/>, giving the user a bird's-eye view of all notes.
+        /// </summary>
         private void OpenNoteManager()
         {
             var managerWindow = new NoteManagerWindow(this, _allNotes);
@@ -386,6 +454,11 @@ namespace DesktopNotes
             searchWindow.Activate();
         }
 
+        /// <summary>
+        /// Activates a note: brings its window to the front if already open,
+        /// or reopens it (sets <c>IsClosed = false</c> and creates a new window) if closed.
+        /// Used by the Note Manager and the tray icon's Closed Notes sub-menu.
+        /// </summary>
         public void ActivateNote(Note note)
         {
             if (note.IsClosed)
