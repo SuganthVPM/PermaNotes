@@ -6,6 +6,10 @@
         mc:Ignorable="d"
         Title="Note Manager" Height="450" Width="600"
         WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
         Background="#1E1E1E" Foreground="#EEEEEE"
         FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI">
 
@@ -115,6 +119,7 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
             <Button Content="New Note" Style="{StaticResource ActionButtonStyle}" Click="NewNote_Click"/>
             <Button Content="Toggle Open/Close" Style="{StaticResource ActionButtonStyle}" Click="ToggleState_Click"/>
+            <Button Content="Toggle Click-Through" Style="{StaticResource ActionButtonStyle}" Click="ToggleClickThrough_Click" Background="#5C3D8F"/>
             <Button Content="Delete" Style="{StaticResource ActionButtonStyle}" Background="#8B0000" Click="DeleteNote_Click"/>
         </StackPanel>
     </Grid>

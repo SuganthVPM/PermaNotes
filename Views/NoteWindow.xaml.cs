@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using DesktopNotes.Models;
 
@@ -98,6 +99,75 @@ namespace DesktopNotes.Views
             NoteModel = note;
         }
 
+        // ---- Win32 Click-Through ----
+
+        public const int WS_EX_TRANSPARENT = 0x00000020;
+        public const int GWL_EXSTYLE = -20;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern int GetWindowLong(IntPtr hwnd, int index);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+
+        private PinWindow? _pinWindow;
+        /// <summary>
+        /// When true, the WndProc Z-order guard is temporarily disabled to allow
+        /// intentional Z-order changes (e.g., re-attaching to desktop after click-through).
+        /// </summary>
+        private bool _suppressZOrderGuard = false;
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            var hwnd = new WindowInteropHelper(this).Handle;
+            HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == 0x0046) // WM_WINDOWPOSCHANGING
+            {
+                // Only guard Z-order when note is in desktop-attached mode and not mid-transition
+                if (!_suppressZOrderGuard && !NoteModel.IsAlwaysOnTop && !NoteModel.IsClickThrough)
+                {
+                    var wp = System.Runtime.InteropServices.Marshal.PtrToStructure<DesktopNotes.Interop.NativeMethods.WINDOWPOS>(lParam);
+                    
+                    // If Z-order is being changed (SWP_NOZORDER not set)
+                    if ((wp.flags & 0x0004U) == 0)
+                    {
+                        // Block the Z-order change so note stays behind normal apps
+                        wp.flags |= 0x0004U; // SWP_NOZORDER
+                        wp.flags |= 0x0200U; // SWP_NOOWNERZORDER
+                        
+                        System.Runtime.InteropServices.Marshal.StructureToPtr(wp, lParam, false);
+                    }
+                }
+            }
+            return IntPtr.Zero;
+        }
+
+        internal void SetDesktopZOrder(IntPtr hwndInsertAfter)
+        {
+            _suppressZOrderGuard = true;
+            try
+            {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    DesktopNotes.Interop.NativeMethods.SetWindowPos(
+                        hwnd, hwndInsertAfter,
+                        0, 0, 0, 0,
+                        0x0213 // SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER
+                    );
+                }
+            }
+            finally
+            {
+                _suppressZOrderGuard = false;
+            }
+        }
+
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
@@ -107,6 +177,9 @@ namespace DesktopNotes.Views
             Height = NoteModel.Height;
             TitleBlock.Text = NoteModel.Title;
             Topmost = NoteModel.IsAlwaysOnTop;
+
+            LocationChanged += NoteWindow_LocationChanged;
+            SizeChanged += NoteWindow_SizeChanged;
 
             if (TryFindResource("NoteContextMenu") is ContextMenu cm)
             {
@@ -139,6 +212,7 @@ namespace DesktopNotes.Views
 
             ApplyBackgroundColor(NoteModel.BackgroundColor);
             UpdateLockUI();
+            ApplyClickThroughState(); // restore persisted click-through state
 
             _isInitializing = false;
         }
@@ -538,6 +612,49 @@ namespace DesktopNotes.Views
             CheckFormatPopup();
         }
 
+        private void ContentRichTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                // Let the RichTextBox handle zoom if Ctrl is pressed
+                return;
+            }
+
+            if (sender is System.Windows.Controls.RichTextBox rtb)
+            {
+                var scrollViewer = GetDescendantByType<ScrollViewer>(rtb);
+                if (scrollViewer != null)
+                {
+                    e.Handled = true;
+                    // Windows default scroll delta is typically 120. 
+                    // Slow it down to ~30% of normal physical scrolling speed for a smoother, more controlled feel in a small window.
+                    double scrollMultiplier = 0.3;
+                    scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - (e.Delta * scrollMultiplier));
+                }
+            }
+        }
+
+        private static T? GetDescendantByType<T>(DependencyObject depObj) where T : DependencyObject
+        {
+            if (depObj == null) return null;
+
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(depObj); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(depObj, i);
+                if (child is T result)
+                {
+                    return result;
+                }
+
+                T? childItem = GetDescendantByType<T>(child);
+                if (childItem != null)
+                {
+                    return childItem;
+                }
+            }
+            return null;
+        }
+
         private void CheckFormatPopup()
         {
             if (NoteModel.IsLocked)
@@ -766,6 +883,26 @@ namespace DesktopNotes.Views
             }
         }
 
+        private void NoteWindow_LocationChanged(object? sender, EventArgs e)
+        {
+            UpdatePinWindowPosition();
+        }
+
+        private void NoteWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdatePinWindowPosition();
+        }
+
+        private void UpdatePinWindowPosition()
+        {
+            if (_pinWindow != null && ClickThroughBtn.IsVisible)
+            {
+                var pt = ClickThroughBtn.TranslatePoint(new System.Windows.Point(0, 0), this);
+                _pinWindow.Left = this.Left + pt.X;
+                _pinWindow.Top = this.Top + pt.Y;
+            }
+        }
+
         // --- Opacity ---
 
         private void OpacityMenu_Click(object sender, RoutedEventArgs e)
@@ -784,18 +921,158 @@ namespace DesktopNotes.Views
             }
         }
 
+        // --- Click-Through ---
+
+        /// <summary>
+        /// Synchronises the UI (handle button visibility, context menu label, Topmost, desktop
+        /// detach) to the current value of <see cref="NoteModel.IsClickThrough"/>.
+        /// Call after toggling <see cref="NoteModel.IsClickThrough"/> and on startup.
+        /// Public so <see cref="NoteManagerWindow"/> can reach it as a fallback.
+        /// </summary>
+        public void ApplyClickThroughState()
+        {
+            MenuItem? clickThroughMenuItem = null;
+            if (TryFindResource("NoteContextMenu") is ContextMenu cm)
+            {
+                foreach (var item in cm.Items)
+                {
+                    if (item is MenuItem mi && (mi.Header?.ToString() == "Enable Click-Through" || mi.Header?.ToString() == "Disable Click-Through"))
+                    {
+                        clickThroughMenuItem = mi;
+                        break;
+                    }
+                }
+            }
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            int style = GetWindowLong(hwnd, GWL_EXSTYLE);
+
+            if (NoteModel.IsClickThrough)
+            {
+                // Force always-on-top visually so the note stays visible over other apps,
+                // without modifying the persisted NoteModel.IsAlwaysOnTop value.
+                Topmost = true;
+                
+                // Safely add WS_EX_TRANSPARENT without stripping WS_EX_LAYERED
+                SetWindowLong(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT);
+
+                if (_pinWindow == null)
+                {
+                    _pinWindow = new PinWindow(() => 
+                    {
+                        NoteModel.IsClickThrough = false;
+                        ApplyClickThroughState();
+                        NoteModel.UpdatedAt = DateTime.Now;
+                        NoteChanged?.Invoke(this, EventArgs.Empty);
+                        ShowSavedIndicator();
+                    });
+                    _pinWindow.Owner = this;
+                    
+                    // Position exactly over ClickThroughBtn
+                    var pt = ClickThroughBtn.TranslatePoint(new System.Windows.Point(0, 0), this);
+                    _pinWindow.Left = this.Left + pt.X;
+                    _pinWindow.Top = this.Top + pt.Y;
+                    _pinWindow.Width = ClickThroughBtn.ActualWidth > 0 ? ClickThroughBtn.ActualWidth : 28;
+                    _pinWindow.Height = ClickThroughBtn.ActualHeight > 0 ? ClickThroughBtn.ActualHeight : 28;
+
+                    _pinWindow.Show();
+                }
+
+                if (clickThroughMenuItem != null)
+                {
+                    clickThroughMenuItem.Header = "Disable Click-Through";
+                }
+                AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty); // detach from desktop layer
+            }
+            else
+            {
+                // Temporarily disable the Z-order guard so all the transitions
+                // (Topmost change, owner re-attachment, SetWindowPos) go through.
+                _suppressZOrderGuard = true;
+                try
+                {
+                    // Remove WS_EX_TRANSPARENT
+                    SetWindowLong(hwnd, GWL_EXSTYLE, style & ~WS_EX_TRANSPARENT);
+
+                    // Restore Topmost to whatever the user originally had
+                    Topmost = NoteModel.IsAlwaysOnTop;
+
+                    if (_pinWindow != null)
+                    {
+                        _pinWindow.Close();
+                        _pinWindow = null;
+                    }
+
+                    if (clickThroughMenuItem != null)
+                    {
+                        clickThroughMenuItem.Header = "Enable Click-Through";
+                    }
+
+                    // Fire event so App.xaml.cs re-attaches to desktop (sets owner + HWND_BOTTOM)
+                    AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
+                }
+                finally
+                {
+                    _suppressZOrderGuard = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Toggles click-through on/off from the context menu item.
+        /// </summary>
+        private void ClickThroughMenu_Click(object sender, RoutedEventArgs e)
+        {
+            NoteModel.IsClickThrough = !NoteModel.IsClickThrough;
+            ApplyClickThroughState();
+            NoteModel.UpdatedAt = DateTime.Now;
+            NoteChanged?.Invoke(this, EventArgs.Empty);
+            ShowSavedIndicator();
+        }
+
         // --- Always on Top ---
 
         private void AlwaysOnTopMenu_Click(object sender, RoutedEventArgs e)
         {
             if (sender is MenuItem menuItem)
             {
-                NoteModel.IsAlwaysOnTop = menuItem.IsChecked;
-                Topmost = NoteModel.IsAlwaysOnTop;
-                NoteModel.UpdatedAt = DateTime.Now;
-                AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
-                NoteChanged?.Invoke(this, EventArgs.Empty);
-                ShowSavedIndicator();
+                _suppressZOrderGuard = true;
+                try
+                {
+                    NoteModel.IsAlwaysOnTop = menuItem.IsChecked;
+                    Topmost = NoteModel.IsAlwaysOnTop;
+                    NoteModel.UpdatedAt = DateTime.Now;
+                    AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
+                    NoteChanged?.Invoke(this, EventArgs.Empty);
+                    ShowSavedIndicator();
+                }
+                finally
+                {
+                    _suppressZOrderGuard = false;
+                }
+            }
+        }
+
+        // --- Context Menu Checkmarks ---
+
+        private void ContextMenu_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is ContextMenu menu)
+            {
+                // Find OpacityMenuItem
+                var opacityMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "OpacityMenuItem");
+                if (opacityMenuItem != null)
+                {
+                    foreach (var item in opacityMenuItem.Items.OfType<MenuItem>())
+                    {
+                        if (item.Tag is string opacityStr && double.TryParse(opacityStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double opacityVal))
+                        {
+                            item.IsChecked = Math.Abs(opacityVal - NoteModel.Opacity) < 0.01;
+                        }
+                    }
+                }
             }
         }
 

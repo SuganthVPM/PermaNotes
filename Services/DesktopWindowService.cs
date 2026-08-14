@@ -119,6 +119,10 @@ namespace DesktopNotes.Services
                 style &= ~NativeMethods.WS_EX_APPWINDOW; // remove APPWINDOW if present
                 NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, new IntPtr(style));
 
+                // Explicitly push it to the bottom behind normal windows
+                NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_BOTTOM, 0, 0, 0, 0, 
+                    NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+
                 Debug.WriteLine($"Attached window 0x{hwnd:X} to WorkerW 0x{WorkerWHandle:X}");
                 return true;
             }

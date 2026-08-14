@@ -205,8 +205,11 @@ namespace DesktopNotes
             {
                 try
                 {
-                    if (!note.IsAlwaysOnTop)
+                    if (!note.IsAlwaysOnTop && !note.IsClickThrough)
+                    {
                         _desktopWindowService.AttachWindow(window);
+                        RefreshDesktopZOrder();
+                    }
                 }
                 catch (Exception ex) { Trace($"Attach error: {ex.Message}"); }
             };
@@ -217,10 +220,15 @@ namespace DesktopNotes
             // Always-on-Top toggle: attach/detach from desktop
             window.AlwaysOnTopChanged += (s, _) =>
             {
-                if (note.IsAlwaysOnTop)
+                if (note.IsAlwaysOnTop || note.IsClickThrough)
+                {
                     _desktopWindowService.DetachWindow(window);
+                }
                 else
+                {
                     _desktopWindowService.AttachWindow(window);
+                    RefreshDesktopZOrder();
+                }
             };
 
             // Note actions
@@ -275,10 +283,40 @@ namespace DesktopNotes
         /// </summary>
         internal void CloseNoteWindow(NoteWindow window)
         {
+            // If the note has no content and title is default, delete it permanently instead of just closing it
+            bool isEmpty = string.IsNullOrWhiteSpace(window.NoteModel.Text) && 
+                           window.NoteModel.Title == "New Note";
+
+            if (isEmpty)
+            {
+                DeleteNoteWindow(window);
+                return;
+            }
+
             window.NoteModel.IsClosed = true;
             _activeNoteWindows.Remove(window);
             window.Close();
             OnNotesStateChanged();
+            RefreshDesktopZOrder();
+        }
+
+        /// <summary>
+        /// Reorders all desktop-attached notes so that newer notes appear above older notes,
+        /// while keeping all of them behind normal applications.
+        /// </summary>
+        internal void RefreshDesktopZOrder()
+        {
+            // Iterate from newest to oldest. 
+            // Pushing a note to HWND_BOTTOM puts it under all previously pushed notes.
+            // By pushing the newest first, it ends up above the older notes.
+            for (int i = _activeNoteWindows.Count - 1; i >= 0; i--)
+            {
+                var window = _activeNoteWindows[i];
+                if (!window.NoteModel.IsAlwaysOnTop && !window.NoteModel.IsClickThrough)
+                {
+                    window.SetDesktopZOrder(DesktopNotes.Interop.NativeMethods.HWND_BOTTOM);
+                }
+            }
         }
 
         /// <summary>
@@ -619,7 +657,7 @@ namespace DesktopNotes
                 {
                     foreach (var window in _activeNoteWindows)
                     {
-                        if (!window.NoteModel.IsAlwaysOnTop)
+                        if (!window.NoteModel.IsAlwaysOnTop && !window.NoteModel.IsClickThrough)
                         {
                             _desktopWindowService.AttachWindow(window);
                         }

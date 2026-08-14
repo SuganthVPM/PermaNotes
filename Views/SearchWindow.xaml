@@ -4,6 +4,10 @@
         Title="Perma Notes — Search" 
         Height="400" Width="450"
         WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
         Background="#F5F5F5"
         ShowInTaskbar="True"
         Loaded="Window_Loaded">

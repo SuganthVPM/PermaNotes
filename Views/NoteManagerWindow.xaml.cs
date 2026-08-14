@@ -159,6 +159,26 @@ namespace DesktopNotes.Views
                 }
             }
         }
+
+        /// <summary>
+        /// Fallback toggle for notes that are partially off-screen and whose on-canvas
+        /// handle is unreachable. Syncs the live <see cref="NoteWindow"/> if it exists.
+        /// </summary>
+        private void ToggleClickThrough_Click(object sender, RoutedEventArgs e)
+        {
+            if (NotesListView.SelectedItem is NoteViewModel vm)
+            {
+                vm.Model.IsClickThrough = !vm.Model.IsClickThrough;
+
+                // Sync the live window immediately (updates handle visibility + Topmost)
+                var window = System.Windows.Application.Current.Windows.OfType<NoteWindow>()
+                    .FirstOrDefault(w => w.NoteModel == vm.Model);
+                window?.ApplyClickThroughState();
+
+                _app.OnNotesStateChanged();
+                RefreshList();
+            }
+        }
     }
 
     /// <summary>
@@ -185,10 +205,10 @@ namespace DesktopNotes.Views
         /// <summary>Timestamp of the last edit, shown in the "Last Updated" column.</summary>
         public DateTime UpdatedAt => Model.UpdatedAt;
 
-        /// <summary>"Open" or "Closed" status text.</summary>
-        public string StatusText => Model.IsClosed ? "Closed" : "Open";
+        /// <summary>"Open", "Closed", or "Click-Through" status text.</summary>
+        public string StatusText => Model.IsClosed ? "Closed" : (Model.IsClickThrough ? "Click-Through" : "Open");
 
-        /// <summary>Green (#4CAF50) for open notes, grey (#888888) for closed ones.</summary>
-        public string StatusColor => Model.IsClosed ? "#888888" : "#4CAF50";
+        /// <summary>Green for open, grey for closed, orange for click-through.</summary>
+        public string StatusColor => Model.IsClosed ? "#888888" : (Model.IsClickThrough ? "#FF9800" : "#4CAF50");
     }
 }

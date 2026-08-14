@@ -78,6 +78,14 @@ namespace DesktopNotes.Models
         /// </summary>
         public bool IsLocked { get; set; } = false;
 
+        /// <summary>
+        /// When <c>true</c> all mouse input passes through the note to the window beneath,
+        /// except for the reserved click-through handle region (top-left corner).
+        /// Forces <see cref="IsAlwaysOnTop"/> = true when enabled.
+        /// Toggle via right-click context menu or by clicking the on-canvas pin handle.
+        /// </summary>
+        public bool IsClickThrough { get; set; } = false;
+
         /// <summary>UTC timestamp of when this note was first created.</summary>
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
