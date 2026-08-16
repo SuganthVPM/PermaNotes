@@ -9,7 +9,7 @@
   <Identity
     Name="SuganthVPM.PermaNotes"
     Publisher="CN=E514955A-2427-4DDE-ADEF-6D6580D6EB6D"
-    Version="1.4.1.0" 
+    Version="1.4.2.0" 
     ProcessorArchitecture="x64" />
 
   <Properties>
