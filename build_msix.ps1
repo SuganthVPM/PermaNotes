@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "Publishing PermaNotes for MSIX..." -ForegroundColor Cyan
-& "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./dist/msix_staging
+$dotnetCmd = "dotnet"
+if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) { $dotnetCmd = "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" }
+& $dotnetCmd publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./dist/msix_staging
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Publish failed!" -ForegroundColor Red

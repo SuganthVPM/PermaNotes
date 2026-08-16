@@ -1,6 +1,8 @@
 # 1. Build and Publish the standalone executable
 Write-Host "Publishing PermaNotes standalone executable..." -ForegroundColor Cyan
-& "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./dist
+$dotnetCmd = "dotnet"
+if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) { $dotnetCmd = "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" }
+& $dotnetCmd publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./dist
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Publish failed!" -ForegroundColor Red
@@ -13,7 +15,12 @@ Rename-Item -Path "./dist/PermaNotes.exe" -NewName "PermaNotes_v1.4.2.exe"
 
 # 2. Package the installer using Inno Setup
 Write-Host "Packaging installer with Inno Setup..." -ForegroundColor Cyan
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer.iss
+$isccCmd = "ISCC.exe"
+if (!(Get-Command ISCC.exe -ErrorAction SilentlyContinue)) {
+    if (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") { $isccCmd = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" }
+    elseif (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") { $isccCmd = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+}
+& $isccCmd installer.iss
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Inno Setup packaging failed!" -ForegroundColor Red
