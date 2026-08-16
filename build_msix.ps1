@@ -62,7 +62,7 @@ if (!(Test-Path $makeAppxPath)) {
     exit 1
 }
 
-$msixOut = ".\dist\PermaNotes_v1.4.0.msix"
+$msixOut = ".\dist\PermaNotes_v1.4.1.msix"
 & $makeAppxPath pack -d ".\dist\msix_staging" -p $msixOut -o
 
 if ($LASTEXITCODE -ne 0) {
