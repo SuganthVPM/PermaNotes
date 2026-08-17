@@ -1,631 +1,805 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>PermaNotes — Always-On-Desktop Sticky Notes for Windows</title>
-<meta name="description" content="PermaNotes pins rich-text sticky notes directly to your Windows desktop. Lightweight, offline, self-contained — no accounts, no cloud, no telemetry.">
-<meta property="og:title" content="PermaNotes — Always-On-Desktop Sticky Notes for Windows">
-<meta property="og:description" content="Notes that live on your desktop layer — always visible, never in the way. Offline WPF app for Windows.">
-<meta property="og:type" content="website">
-<meta property="og:image" content="logo.png">
+  <title>PermaNotes - Always-On-Desktop Sticky Notes for Windows</title>
+  <meta name="description"
+    content="PermaNotes pins rich-text sticky notes directly to your Windows desktop. Lightweight, offline, self-contained - no accounts, no cloud, no telemetry.">
+  <meta property="og:title" content="PermaNotes - Always-On-Desktop Sticky Notes for Windows">
+  <meta property="og:description"
+    content="Notes that live on your desktop layer - always visible, never in the way. Offline WPF app for Windows.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="logo.png">
 
-<link rel="icon" href="logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
 
-<style>
-  :root{
-    --canvas: #FAFAFA;
-    --canvas-edge: #E5E7EB;
-    --ink: #111827;
-    --ink-soft: #4B5563;
-    --muted: #6B7280;
-    --blue: #2563EB;
-    --blue-deep: #1D4ED8;
-    --blue-pale: #DBEAFE;
-    --glass: rgba(255,255,255,0.7);
-    --glass-blue: rgba(37,99,235,0.1);
-    --glass-border: rgba(255,255,255,0.8);
-    --radius: 16px;
-  }
+  <style>
+    :root {
+      --canvas: #FAFAFA;
+      --canvas-edge: #E5E7EB;
+      --ink: #111827;
+      --ink-soft: #4B5563;
+      --muted: #6B7280;
+      --blue: #2563EB;
+      --blue-deep: #1D4ED8;
+      --blue-pale: #DBEAFE;
+      --glass: rgba(255, 255, 255, 0.7);
+      --glass-blue: rgba(37, 99, 235, 0.1);
+      --glass-border: rgba(255, 255, 255, 0.8);
+      --radius: 16px;
+    }
 
-  *{ box-sizing: border-box; }
-  html{ scroll-behavior: smooth; }
+    * {
+      box-sizing: border-box;
+    }
 
-  body{
-    margin:0;
-    background:
-      radial-gradient(1100px 600px at 82% -10%, #EFF6FF 0%, transparent 60%),
-      radial-gradient(900px 500px at -10% 30%, #F3F4F6 0%, transparent 55%),
-      var(--canvas);
-    color: var(--ink);
-    font-family: 'Inter', -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
+    html {
+      scroll-behavior: smooth;
+    }
 
-  a{ color: inherit; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(1100px 600px at 82% -10%, #EFF6FF 0%, transparent 60%),
+        radial-gradient(900px 500px at -10% 30%, #F3F4F6 0%, transparent 55%),
+        var(--canvas);
+      color: var(--ink);
+      font-family: 'Inter', -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
 
-  .wrap{
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: 0 32px;
-  }
+    a {
+      color: inherit;
+    }
 
-  /* ---------- Nav ---------- */
-  header.nav{
-    padding: 28px 0 0;
-  }
-  .nav-inner{
-    display:flex;
-    align-items:center;
-    justify-content: space-between;
-  }
-  .brand{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    text-decoration:none;
-  }
-  .brand img{
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    display:block;
-  }
-  .brand span{
-    font-family:'Space Grotesk', sans-serif;
-    font-weight:600;
-    font-size: 18px;
-    letter-spacing: -0.01em;
-    color: var(--ink);
-  }
-  .nav-links{
-    display:flex;
-    align-items:center;
-    gap: 28px;
-    font-size: 14.5px;
-    color: var(--ink-soft);
-  }
-  .nav-links a{ text-decoration:none; }
-  .nav-links a:hover{ color: var(--blue-deep); }
-  .nav-cta{
-    padding: 9px 18px;
-    background: var(--ink);
-    color: #fff !important;
-    border-radius: 999px;
-    font-weight: 500;
-    text-decoration:none;
-    transition: background .15s ease, transform .15s ease;
-  }
-  .nav-cta:hover{ background: var(--blue-deep); transform: translateY(-1px); }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
 
-  /* ---------- Hero ---------- */
-  .hero{
-    padding: 96px 0 60px;
-    display:grid;
-    grid-template-columns: 1.05fr 0.95fr;
-    gap: 40px;
-    align-items:center;
-  }
-  .eyebrow{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    font-family:'JetBrains Mono', monospace;
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--blue-deep);
-    background: var(--blue-pale);
-    padding: 6px 12px;
-    border-radius: 999px;
-    margin-bottom: 22px;
-  }
-  .eyebrow::before{
-    content:"";
-    width:6px; height:6px;
-    border-radius:50%;
-    background: var(--blue);
-  }
-  h1{
-    font-family:'Space Grotesk', sans-serif;
-    font-weight: 700;
-    font-size: clamp(38px, 4.6vw, 60px);
-    line-height: 1.04;
-    letter-spacing: -0.02em;
-    margin: 0 0 22px;
-    color: var(--ink);
-  }
-  h1 em{
-    font-style: normal;
-    background: linear-gradient(100deg, var(--blue) 0%, var(--blue-deep) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .lede{
-    font-size: 18px;
-    line-height: 1.6;
-    color: var(--ink-soft);
-    max-width: 480px;
-    margin: 0 0 34px;
-  }
-  .cta-row{
-    display:flex;
-    align-items:center;
-    gap: 18px;
-    flex-wrap: wrap;
-  }
-  .btn-primary{
-    display:inline-flex;
-    align-items:center;
-    gap:10px;
-    padding: 14px 24px;
-    background: var(--blue);
-    color:#fff;
-    border-radius: 12px;
-    text-decoration:none;
-    font-weight: 600;
-    font-size: 15.5px;
-    box-shadow: 0 10px 24px -8px rgba(30,111,255,0.55);
-    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
-    border: none;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .btn-primary:hover{
-    transform: translateY(-2px);
-    background: var(--blue-deep);
-    box-shadow: 0 14px 28px -8px rgba(11,73,196,0.6);
-  }
-  .btn-ghost{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding: 14px 20px;
-    color: var(--ink-soft);
-    text-decoration:none;
-    font-weight: 500;
-    font-size: 15px;
-    border-bottom: 1px solid transparent;
-    transition: color .15s ease, border-color .15s ease;
-  }
-  .btn-ghost:hover{ color: var(--ink); border-color: var(--ink-soft); }
-  .meta-line{
-    margin-top: 22px;
-    font-family:'JetBrains Mono', monospace;
-    font-size: 12.5px;
-    color: var(--muted);
-  }
+    /* ---------- Nav ---------- */
+    header.nav {
+      padding: 28px 0 0;
+    }
 
-  /* ---------- Hero mockup: notes floating on a desktop ---------- */
-  .stage{
-    position: relative;
-    height: 420px;
-  }
-  .desktop-plane{
-    position:absolute;
-    inset: 10px 0 0 10px;
-    border-radius: 20px;
-    background:
-      linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
-    border: 1px solid #FFFFFF;
-    box-shadow: 0 30px 60px -30px rgba(17,24,39,0.15);
-  }
-  .grid-dots{
-    position:absolute;
-    inset:0;
-    border-radius: 20px;
-    background-image: radial-gradient(rgba(37,99,235,0.12) 1.4px, transparent 1.4px);
-    background-size: 26px 26px;
-    background-position: 14px 14px;
-    -webkit-mask-image: linear-gradient(180deg, black, transparent 85%);
-            mask-image: linear-gradient(180deg, black, transparent 85%);
-  }
-  .note{
-    position:absolute;
-    width: 168px;
-    padding: 16px 16px 14px;
-    border-radius: var(--radius);
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    box-shadow: 0 18px 34px -18px rgba(20,50,110,0.45);
-    animation: float 7s ease-in-out infinite;
-  }
-  .note .dot-row{ display:flex; gap:5px; margin-bottom:12px; }
-  .note .dot{ width:7px; height:7px; border-radius:50%; background: rgba(11,43,102,0.18); }
-  .note .line{ height:7px; border-radius:4px; background: rgba(11,43,102,0.16); margin-bottom:7px; }
-  .note .line.short{ width: 58%; }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
 
-  .note-a{ top: 26px; left: 26px; transform: rotate(-4deg); animation-delay: 0s; z-index:3; }
-  .note-b{
-    top: 108px; left: 168px; transform: rotate(3deg);
-    background: linear-gradient(160deg, rgba(30,111,255,0.22), rgba(30,111,255,0.10));
-    animation-delay: .6s; z-index:2;
-  }
-  .note-b .dot, .note-b .line{ background: rgba(11,43,102,0.28); }
-  .note-c{ top: 232px; left: 54px; transform: rotate(-2deg); animation-delay: 1.2s; z-index:1; opacity:.9; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
 
-  .icon-row{
-    position:absolute;
-    right: 22px;
-    top: 24px;
-    display:flex;
-    flex-direction:column;
-    gap: 16px;
-    opacity: .55;
-  }
-  .icon-chip{
-    width: 30px; height:30px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.7);
-    border: 1px solid rgba(255,255,255,0.9);
-  }
+    .brand img {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      display: block;
+    }
 
-  @keyframes float{
-    0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
-    50% { transform: translateY(-9px) rotate(var(--r, 0deg)); }
-  }
-  .note-a{ --r: -4deg; }
-  .note-b{ --r: 3deg; }
-  .note-c{ --r: -2deg; }
+    .brand span {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
 
-  @media (prefers-reduced-motion: reduce){
-    .note{ animation: none; }
-  }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      font-size: 14.5px;
+      color: var(--ink-soft);
+    }
 
-  /* ---------- Feature strip ---------- */
-  .features{
-    padding: 30px 0 70px;
-    border-top: 1px solid var(--canvas-edge);
-    margin-top: 30px;
-    display:grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 28px;
-  }
-  .feature h3{
-    font-family:'Space Grotesk', sans-serif;
-    font-size: 16.5px;
-    font-weight: 600;
-    margin: 14px 0 8px;
-    letter-spacing: -0.01em;
-  }
-  .feature p{
-    font-size: 14.5px;
-    line-height: 1.55;
-    color: var(--muted);
-    margin: 0;
-  }
-  .f-mark{
-    width: 34px; height: 34px;
-    border-radius: 10px;
-    background: var(--blue-pale);
-    display:flex; align-items:center; justify-content:center;
-    color: var(--blue-deep);
-    font-family:'JetBrains Mono', monospace;
-    font-size: 13px;
-    font-weight: 500;
-  }
+    .nav-links a {
+      text-decoration: none;
+    }
 
-  /* ---------- Detail section ---------- */
-  .detail{
-    padding: 60px 0 90px;
-    display:grid;
-    grid-template-columns: 0.9fr 1.1fr;
-    gap: 60px;
-    align-items:center;
-    border-top: 1px solid var(--canvas-edge);
-  }
-  .panel{
-    border-radius: 22px;
-    background: linear-gradient(165deg, #F1F5F9, #F8FAFC);
-    border: 1px solid #fff;
-    padding: 34px;
-    position:relative;
-    overflow:hidden;
-    min-height: 300px;
-  }
-  .panel .note{ position:relative; animation:none; margin-bottom: 14px; width: auto; }
-  .panel .note:last-child{ margin-bottom:0; }
-  .panel .note-solo{
-    background: rgba(255,255,255,0.7);
-  }
+    .nav-links a:hover {
+      color: var(--blue-deep);
+    }
 
-  .detail h2{
-    font-family:'Space Grotesk', sans-serif;
-    font-size: 30px;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-    margin: 0 0 16px;
-  }
-  .detail p{
-    font-size: 16px;
-    line-height: 1.7;
-    color: var(--ink-soft);
-    margin: 0 0 22px;
-    max-width: 480px;
-  }
-  .spec-list{
-    list-style:none;
-    padding:0; margin:0;
-    display:grid;
-    gap: 12px;
-    font-size: 14.5px;
-    color: var(--ink-soft);
-  }
-  .spec-list li{
-    display:flex;
-    gap: 12px;
-    align-items:baseline;
-  }
-  .spec-list .k{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--blue-deep);
-    min-width: 108px;
-  }
+    .nav-cta {
+      padding: 9px 18px;
+      background: var(--ink);
+      color: #fff !important;
+      border-radius: 999px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background .15s ease, transform .15s ease;
+    }
 
-  /* ---------- Footer / CTA ---------- */
-  .cta-band{
-    border-top: 1px solid var(--canvas-edge);
-    padding: 64px 0 40px;
-    text-align:center;
-  }
-  .cta-band h2{
-    font-family:'Space Grotesk', sans-serif;
-    font-size: 30px;
-    margin: 0 0 12px;
-    letter-spacing: -0.015em;
-  }
-  .cta-band p{
-    color: var(--muted);
-    margin: 0 0 28px;
-    font-size: 15.5px;
-  }
-  footer{
-    padding: 26px 0 40px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    font-size: 13.5px;
-    color: var(--muted);
-  }
-  footer a{ text-decoration:none; color: var(--muted); }
-  footer a:hover{ color: var(--ink); }
-  .foot-links{ display:flex; gap:20px; }
+    .nav-cta:hover {
+      background: var(--blue-deep);
+      transform: translateY(-1px);
+    }
 
-  /* ---------- Dropdown ---------- */
-  .dropdown {
-    position: relative;
-    display: inline-block;
-  }
-  .dropdown-content {
-    display: none;
-    position: absolute;
-    background-color: #fff;
-    min-width: 240px;
-    box-shadow: 0 10px 25px rgba(17,24,39,0.1);
-    border-radius: 12px;
-    padding: 8px;
-    z-index: 100;
-    bottom: calc(100% + 12px); /* Opens upwards */
-    left: 50%;
-    transform: translateX(-50%);
-    border: 1px solid var(--canvas-edge);
-    text-align: left;
-  }
-  /* Invisible bridge to prevent hover loss over the gap */
-  .dropdown-content::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    height: 18px;
-  }
-  .dropdown:hover .dropdown-content,
-  .dropdown:focus-within .dropdown-content {
-    display: block;
-    animation: fadeIn 0.2s ease;
-  }
-  .dropdown-item {
-    display: flex;
-    flex-direction: column;
-    padding: 10px 14px;
-    text-decoration: none;
-    color: var(--ink);
-    border-radius: 8px;
-    transition: background 0.15s;
-  }
-  .dropdown-item:hover {
-    background-color: var(--canvas);
-  }
-  .dropdown-item strong {
-    font-weight: 600;
-    font-size: 14.5px;
-  }
-  .dropdown-item span {
-    font-size: 12.5px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translate(-50%, 10px); }
-    to { opacity: 1; transform: translate(-50%, 0); }
-  }
+    /* ---------- Hero ---------- */
+    .hero {
+      padding: 96px 0 60px;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 40px;
+      align-items: center;
+    }
 
-  @media (max-width: 860px){
-    .hero{ grid-template-columns: 1fr; padding-top: 60px; }
-    .stage{ height: 320px; order: -1; }
-    .features{ grid-template-columns: repeat(2, 1fr); }
-    .detail{ grid-template-columns: 1fr; }
-    .nav-links{ display:none; }
-  }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--blue-deep);
+      background: var(--blue-pale);
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 22px;
+    }
 
-  a:focus-visible, button:focus-visible{
-    outline: 2px solid var(--blue-deep);
-    outline-offset: 3px;
-    border-radius: 6px;
-  }
-</style>
+    .eyebrow::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--blue);
+    }
+
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: clamp(38px, 4.6vw, 60px);
+      line-height: 1.04;
+      letter-spacing: -0.02em;
+      margin: 0 0 22px;
+      color: var(--ink);
+    }
+
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(100deg, var(--blue) 0%, var(--blue-deep) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .lede {
+      font-size: 18px;
+      line-height: 1.6;
+      color: var(--ink-soft);
+      max-width: 480px;
+      margin: 0 0 34px;
+    }
+
+    .cta-row {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      background: var(--blue);
+      color: #fff;
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15.5px;
+      box-shadow: 0 10px 24px -8px rgba(30, 111, 255, 0.55);
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      background: var(--blue-deep);
+      box-shadow: 0 14px 28px -8px rgba(11, 73, 196, 0.6);
+    }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 20px;
+      color: var(--ink-soft);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 15px;
+      border-bottom: 1px solid transparent;
+      transition: color .15s ease, border-color .15s ease;
+    }
+
+    .btn-ghost:hover {
+      color: var(--ink);
+      border-color: var(--ink-soft);
+    }
+
+    .meta-line {
+      margin-top: 22px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    /* ---------- Hero mockup: notes floating on a desktop ---------- */
+    .stage {
+      position: relative;
+      height: 420px;
+    }
+
+    .desktop-plane {
+      position: absolute;
+      inset: 10px 0 0 10px;
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+      border: 1px solid #FFFFFF;
+      box-shadow: 0 30px 60px -30px rgba(17, 24, 39, 0.15);
+    }
+
+    .grid-dots {
+      position: absolute;
+      inset: 0;
+      border-radius: 20px;
+      background-image: radial-gradient(rgba(37, 99, 235, 0.12) 1.4px, transparent 1.4px);
+      background-size: 26px 26px;
+      background-position: 14px 14px;
+      -webkit-mask-image: linear-gradient(180deg, black, transparent 85%);
+      mask-image: linear-gradient(180deg, black, transparent 85%);
+    }
+
+    .note {
+      position: absolute;
+      width: 168px;
+      padding: 16px 16px 14px;
+      border-radius: var(--radius);
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      box-shadow: 0 18px 34px -18px rgba(20, 50, 110, 0.45);
+      animation: float 7s ease-in-out infinite;
+    }
+
+    .note .dot-row {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 12px;
+    }
+
+    .note .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(11, 43, 102, 0.18);
+    }
+
+    .note .line {
+      height: 7px;
+      border-radius: 4px;
+      background: rgba(11, 43, 102, 0.16);
+      margin-bottom: 7px;
+    }
+
+    .note .line.short {
+      width: 58%;
+    }
+
+    .note-a {
+      top: 26px;
+      left: 26px;
+      transform: rotate(-4deg);
+      animation-delay: 0s;
+      z-index: 3;
+    }
+
+    .note-b {
+      top: 108px;
+      left: 168px;
+      transform: rotate(3deg);
+      background: linear-gradient(160deg, rgba(30, 111, 255, 0.22), rgba(30, 111, 255, 0.10));
+      animation-delay: .6s;
+      z-index: 2;
+    }
+
+    .note-b .dot,
+    .note-b .line {
+      background: rgba(11, 43, 102, 0.28);
+    }
+
+    .note-c {
+      top: 232px;
+      left: 54px;
+      transform: rotate(-2deg);
+      animation-delay: 1.2s;
+      z-index: 1;
+      opacity: .9;
+    }
+
+    .icon-row {
+      position: absolute;
+      right: 22px;
+      top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      opacity: .55;
+    }
+
+    .icon-chip {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(var(--r, 0deg));
+      }
+
+      50% {
+        transform: translateY(-9px) rotate(var(--r, 0deg));
+      }
+    }
+
+    .note-a {
+      --r: -4deg;
+    }
+
+    .note-b {
+      --r: 3deg;
+    }
+
+    .note-c {
+      --r: -2deg;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .note {
+        animation: none;
+      }
+    }
+
+    /* ---------- Feature strip ---------- */
+    .features {
+      padding: 30px 0 70px;
+      border-top: 1px solid var(--canvas-edge);
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 28px;
+    }
+
+    .feature h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16.5px;
+      font-weight: 600;
+      margin: 14px 0 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature p {
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .f-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--blue-pale);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--blue-deep);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* ---------- Detail section ---------- */
+    .detail {
+      padding: 60px 0 90px;
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 60px;
+      align-items: center;
+      border-top: 1px solid var(--canvas-edge);
+    }
+
+    .panel {
+      border-radius: 22px;
+      background: linear-gradient(165deg, #F1F5F9, #F8FAFC);
+      border: 1px solid #fff;
+      padding: 34px;
+      position: relative;
+      overflow: hidden;
+      min-height: 300px;
+    }
+
+    .panel .note {
+      position: relative;
+      animation: none;
+      margin-bottom: 14px;
+      width: auto;
+    }
+
+    .panel .note:last-child {
+      margin-bottom: 0;
+    }
+
+    .panel .note-solo {
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .detail h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      margin: 0 0 16px;
+    }
+
+    .detail p {
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--ink-soft);
+      margin: 0 0 22px;
+      max-width: 480px;
+    }
+
+    .spec-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 12px;
+      font-size: 14.5px;
+      color: var(--ink-soft);
+    }
+
+    .spec-list li {
+      display: flex;
+      gap: 12px;
+      align-items: baseline;
+    }
+
+    .spec-list .k {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--blue-deep);
+      min-width: 108px;
+    }
+
+    /* ---------- Footer / CTA ---------- */
+    .cta-band {
+      border-top: 1px solid var(--canvas-edge);
+      padding: 64px 0 40px;
+      text-align: center;
+    }
+
+    .cta-band h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 30px;
+      margin: 0 0 12px;
+      letter-spacing: -0.015em;
+    }
+
+    .cta-band p {
+      color: var(--muted);
+      margin: 0 0 28px;
+      font-size: 15.5px;
+    }
+
+    footer {
+      padding: 26px 0 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    footer a {
+      text-decoration: none;
+      color: var(--muted);
+    }
+
+    footer a:hover {
+      color: var(--ink);
+    }
+
+    .foot-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    /* ---------- Dropdown ---------- */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background-color: #fff;
+      min-width: 240px;
+      box-shadow: 0 10px 25px rgba(17, 24, 39, 0.1);
+      border-radius: 12px;
+      padding: 8px;
+      z-index: 100;
+      bottom: calc(100% + 12px);
+      /* Opens upwards */
+      left: 50%;
+      transform: translateX(-50%);
+      border: 1px solid var(--canvas-edge);
+      text-align: left;
+    }
+
+    /* Invisible bridge to prevent hover loss over the gap */
+    .dropdown-content::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      height: 18px;
+    }
+
+    .dropdown:hover .dropdown-content,
+    .dropdown:focus-within .dropdown-content {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .dropdown-item {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 14px;
+      text-decoration: none;
+      color: var(--ink);
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+
+    .dropdown-item:hover {
+      background-color: #c4c6ce;
+    }
+
+    .dropdown-item strong {
+      font-weight: 600;
+      font-size: 14.5px;
+    }
+
+    .dropdown-item span {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 60px;
+      }
+
+      .stage {
+        height: 320px;
+        order: -1;
+      }
+
+      .features {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .detail {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--blue-deep);
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
+
+    /* ---------- Images (Overrides) ---------- */
+    .stage {
+      position: relative !important;
+      height: 420px !important;
+      width: 100% !important;
+    }
+
+    .stage img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      object-position: center left !important;
+      border-radius: 20px !important;
+      box-shadow: 0 30px 60px -30px rgba(17, 24, 39, 0.15) !important;
+      border: 1px solid #FFFFFF !important;
+      display: block !important;
+    }
+
+    .panel-img {
+      width: 100% !important;
+      height: 360px !important;
+      object-fit: cover !important;
+      object-position: center !important;
+      border-radius: 22px !important;
+      box-shadow: 0 20px 40px -20px rgba(17, 24, 39, 0.1) !important;
+      border: 1px solid #FFFFFF !important;
+      display: block !important;
+    }
+  </style>
 </head>
+
 <body>
 
-<header class="nav">
-  <div class="wrap nav-inner">
-    <a class="brand" href="#top">
-      <img src="logo.png" alt="PermaNotes logo">
-      <span>PermaNotes</span>
-    </a>
-    <nav class="nav-links">
-      <a href="#why">Why PermaNotes</a>
-      <a href="#specs">Details</a>
-      <a href="https://github.com/SuganthVPM/PermaNotes" target="_blank" rel="noopener">GitHub</a>
-    </nav>
-    <a class="nav-cta" href="#download">Download</a>
-  </div>
-</header>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top">
+        <img src="logo.png" alt="PermaNotes logo">
+        <span>PermaNotes</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#why">Why PermaNotes</a>
+        <a href="#specs">Details</a>
+        <a href="https://github.com/SuganthVPM/PermaNotes" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="#download">Download</a>
+    </div>
+  </header>
 
-<main class="wrap">
+  <main class="wrap">
 
-  <section class="hero" id="top">
-    <div>
-      <span class="eyebrow">For Windows 10 &amp; 11</span>
-      <h1>Notes that live<br><em>on your desktop.</em></h1>
-      <p class="lede">
-        PermaNotes pins rich-text sticky notes directly to your desktop layer —
-        always visible, tucked beneath your open windows. No accounts, no sync,
-        no telemetry. Just notes, where you left them.
-      </p>
-      <div class="cta-row">
-        <a class="btn-primary" href="#download">
-          Download for Windows
-        </a>
-        <a class="btn-ghost" href="https://github.com/SuganthVPM/PermaNotes" target="_blank" rel="noopener">View source →</a>
+    <section class="hero" id="top">
+      <div>
+        <span class="eyebrow">For Windows 10 &amp; 11</span>
+        <h1>Notes that live<br><em>on your desktop.</em></h1>
+        <p class="lede">
+          PermaNotes pins rich-text sticky notes directly to your desktop layer -
+          always visible, tucked beneath your open windows. No accounts, no sync,
+          no telemetry. Just notes, where you left them.
+        </p>
+        <div class="cta-row">
+          <a class="btn-primary" href="#download">
+            Download for Windows
+          </a>
+          <a class="btn-ghost" href="https://github.com/SuganthVPM/PermaNotes" target="_blank" rel="noopener">View
+            source →</a>
+        </div>
+        <div class="meta-line">permanotes.exe · self-contained · offline · ~ single file</div>
       </div>
-      <div class="meta-line">permanotes.exe · self-contained · offline · ~ single file</div>
-    </div>
 
-    <div class="stage" aria-hidden="true">
-      <div class="desktop-plane"></div>
-      <div class="grid-dots"></div>
-      <div class="icon-row">
-        <div class="icon-chip"></div>
-        <div class="icon-chip"></div>
-        <div class="icon-chip"></div>
+      <div class="stage" aria-hidden="true">
+        <img src="permanotes-hero-abstract.png" alt="PermaNotes floating on desktop">
       </div>
-      <div class="note note-a">
-        <div class="dot-row"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-        <div class="line"></div>
-        <div class="line"></div>
-        <div class="line short"></div>
-      </div>
-      <div class="note note-b">
-        <div class="dot-row"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-        <div class="line"></div>
-        <div class="line short"></div>
-      </div>
-      <div class="note note-c">
-        <div class="dot-row"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-        <div class="line"></div>
-        <div class="line"></div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="features" id="why">
-    <div class="feature">
-      <div class="f-mark">01</div>
-      <h3>Always on desktop</h3>
-      <p>Notes sit on the desktop layer itself — visible on Win+D, hidden beneath your open windows.</p>
-    </div>
-    <div class="feature">
-      <div class="f-mark">02</div>
-      <h3>Frosted glass notes</h3>
-      <p>Rich text notes with adjustable opacity, styled with a soft frosted-glass finish.</p>
-    </div>
-    <div class="feature">
-      <div class="f-mark">03</div>
-      <h3>100% offline</h3>
-      <p>No account, no cloud sync, no telemetry. Your notes never leave your machine.</p>
-    </div>
-    <div class="feature">
-      <div class="f-mark">04</div>
-      <h3>One file, no install</h3>
-      <p>Ships as a self-contained executable. Download it, run it, done.</p>
-    </div>
-  </section>
-
-  <section class="detail" id="specs">
-    <div class="panel" aria-hidden="true">
-      <div class="note note-solo">
-        <div class="dot-row"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-        <div class="line"></div>
-        <div class="line"></div>
-        <div class="line short"></div>
+    <section class="features" id="why">
+      <div class="feature">
+        <div class="f-mark">01</div>
+        <h3>Always on desktop</h3>
+        <p>Notes sit on the desktop layer itself - visible on Win+D, hidden beneath your open windows.</p>
       </div>
-      <div class="note note-solo">
-        <div class="dot-row"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-        <div class="line"></div>
-        <div class="line short"></div>
+      <div class="feature">
+        <div class="f-mark">02</div>
+        <h3>Frosted glass notes</h3>
+        <p>Rich text notes with adjustable opacity, styled with a soft frosted-glass finish.</p>
       </div>
-    </div>
-    <div>
-      <h2>Built to stay out of the way.</h2>
-      <p>
-        PermaNotes uses the same desktop shell layer as your icons and wallpaper,
-        so notes are part of your desktop instead of another window competing
-        for focus. Press Win+D and they're right there.
-      </p>
-      <ul class="spec-list">
-        <li><span class="k">PLATFORM</span> Windows 10 / 11</li>
-        <li><span class="k">BUILT WITH</span> WPF on .NET 8</li>
-        <li><span class="k">CONTENT</span> Rich text (RTF), auto-saved</li>
-        <li><span class="k">STORAGE</span> Local, atomic JSON persistence</li>
-        <li><span class="k">NETWORK</span> None — fully offline</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="cta-band" id="download">
-    <h2>Get PermaNotes.</h2>
-    <p>Free, offline, one executable.</p>
-    <div class="dropdown">
-      <button class="btn-primary">
-        Download latest release ▾
-      </button>
-      <div class="dropdown-content">
-        <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-setup">
-          <strong>Installer</strong>
-          <span>Standard setup .exe</span>
-        </a>
-        <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-portable">
-          <strong>Portable App</strong>
-          <span>Standalone .exe (no install)</span>
-        </a>
-        <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-msix">
-          <strong>MSIX Package</strong>
-          <span>For Microsoft Store</span>
-        </a>
+      <div class="feature">
+        <div class="f-mark">03</div>
+        <h3>100% offline</h3>
+        <p>No account, no cloud sync, no telemetry. Your notes never leave your machine.</p>
       </div>
-    </div>
-  </section>
+      <div class="feature">
+        <div class="f-mark">04</div>
+        <h3>One file, no install</h3>
+        <p>Ships as a self-contained executable. Download it, run it, done.</p>
+      </div>
+    </section>
 
-  <footer>
-    <span>© 2026 PermaNotes</span>
-    <div class="foot-links">
-      <a href="https://github.com/SuganthVPM/PermaNotes" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/SuganthVPM/PermaNotes/releases" target="_blank" rel="noopener">Releases</a>
-      <a href="#top">Back to top</a>
-    </div>
-  </footer>
+    <section class="detail" id="specs">
+      <img src="permanotes-notes-abstract.png" class="panel-img" alt="PermaNotes interface preview" aria-hidden="true">
+      <div>
+        <h2>Built to stay out of the way.</h2>
+        <p>
+          PermaNotes uses the same desktop shell layer as your icons and wallpaper,
+          so notes are part of your desktop instead of another window competing
+          for focus. Press Win+D and they're right there.
+        </p>
+        <ul class="spec-list">
+          <li><span class="k">PLATFORM</span> Windows 10 / 11</li>
+          <li><span class="k">BUILT WITH</span> WPF on .NET 8</li>
+          <li><span class="k">CONTENT</span> Rich text (RTF), auto-saved</li>
+          <li><span class="k">STORAGE</span> Local, atomic JSON persistence</li>
+          <li><span class="k">NETWORK</span> None - fully offline</li>
+        </ul>
+      </div>
+    </section>
 
-</main>
+    <section class="cta-band" id="download">
+      <h2>Get PermaNotes.</h2>
+      <p>Free, offline, one executable.</p>
+      <div class="dropdown">
+        <button class="btn-primary">
+          Download latest release ▾
+        </button>
+        <div class="dropdown-content">
+          <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-setup">
+            <strong>Installer</strong>
+            <span>Standard setup .exe</span>
+          </a>
+          <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-portable">
+            <strong>Portable App</strong>
+            <span>Standalone .exe (no install)</span>
+          </a>
+          <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-msix">
+            <strong>MSIX Package</strong>
+            <span>For Microsoft Store</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>© 2026 PermaNotes</span>
+      <div class="foot-links">
+        <a href="https://github.com/SuganthVPM/PermaNotes" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/SuganthVPM/PermaNotes/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="#top">Back to top</a>
+      </div>
+    </footer>
+
+  </main>
 
 </body>
 <script>
@@ -634,7 +808,7 @@
       .then(res => res.json())
       .then(data => {
         if (!data.assets) return;
-        
+
         let portableUrl = "https://github.com/SuganthVPM/PermaNotes/releases/latest";
         let setupUrl = "https://github.com/SuganthVPM/PermaNotes/releases/latest";
         let msixUrl = "https://github.com/SuganthVPM/PermaNotes/releases/latest";
@@ -657,4 +831,5 @@
       .catch(err => console.error("Error fetching release:", err));
   });
 </script>
+
 </html>
