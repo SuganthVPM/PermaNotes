@@ -396,6 +396,57 @@
   footer a:hover{ color: var(--ink); }
   .foot-links{ display:flex; gap:20px; }
 
+  /* ---------- Dropdown ---------- */
+  .dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #fff;
+    min-width: 240px;
+    box-shadow: 0 10px 25px rgba(17,24,39,0.1);
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 100;
+    bottom: calc(100% + 12px); /* Opens upwards */
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid var(--canvas-edge);
+    text-align: left;
+  }
+  .dropdown:hover .dropdown-content,
+  .dropdown:focus-within .dropdown-content {
+    display: block;
+    animation: fadeIn 0.2s ease;
+  }
+  .dropdown-item {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: var(--ink);
+    border-radius: 8px;
+    transition: background 0.15s;
+  }
+  .dropdown-item:hover {
+    background-color: var(--canvas);
+  }
+  .dropdown-item strong {
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+  .dropdown-item span {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+
   @media (max-width: 860px){
     .hero{ grid-template-columns: 1fr; padding-top: 60px; }
     .stage{ height: 320px; order: -1; }
@@ -532,7 +583,25 @@
   <section class="cta-band" id="download">
     <h2>Get PermaNotes.</h2>
     <p>Free, offline, one executable.</p>
-    <a class="btn-primary" href="https://github.com/SuganthVPM/PermaNotes/releases/latest" target="_blank" rel="noopener">Download latest release</a>
+    <div class="dropdown">
+      <a class="btn-primary" href="https://github.com/SuganthVPM/PermaNotes/releases/latest" target="_blank" rel="noopener">
+        Download latest release ▾
+      </a>
+      <div class="dropdown-content">
+        <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-setup">
+          <strong>Installer</strong>
+          <span>Standard setup .exe</span>
+        </a>
+        <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-portable">
+          <strong>Portable App</strong>
+          <span>Standalone .exe (no install)</span>
+        </a>
+        <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-msix">
+          <strong>MSIX Package</strong>
+          <span>For Microsoft Store</span>
+        </a>
+      </div>
+    </div>
   </section>
 
   <footer>
@@ -547,4 +616,33 @@
 </main>
 
 </body>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    fetch("https://api.github.com/repos/SuganthVPM/PermaNotes/releases/latest")
+      .then(res => res.json())
+      .then(data => {
+        if (!data.assets) return;
+        
+        let portableUrl = "https://github.com/SuganthVPM/PermaNotes/releases/latest";
+        let setupUrl = "https://github.com/SuganthVPM/PermaNotes/releases/latest";
+        let msixUrl = "https://github.com/SuganthVPM/PermaNotes/releases/latest";
+
+        data.assets.forEach(asset => {
+          const name = asset.name.toLowerCase();
+          if (name.endsWith(".msix")) {
+            msixUrl = asset.browser_download_url;
+          } else if (name.includes("setup") && name.endsWith(".exe")) {
+            setupUrl = asset.browser_download_url;
+          } else if (name.endsWith(".exe")) {
+            portableUrl = asset.browser_download_url;
+          }
+        });
+
+        document.querySelectorAll('.dl-portable').forEach(el => el.href = portableUrl);
+        document.querySelectorAll('.dl-setup').forEach(el => el.href = setupUrl);
+        document.querySelectorAll('.dl-msix').forEach(el => el.href = msixUrl);
+      })
+      .catch(err => console.error("Error fetching release:", err));
+  });
+</script>
 </html>
