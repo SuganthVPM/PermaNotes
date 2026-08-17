@@ -15,34 +15,11 @@ Write-Host "Generating required PNG assets for MSIX..." -ForegroundColor Cyan
 $stagingAssets = ".\dist\msix_staging\Assets"
 if (!(Test-Path $stagingAssets)) { New-Item -ItemType Directory -Force -Path $stagingAssets | Out-Null }
 
-Add-Type -AssemblyName System.Drawing
-
-function Create-Image {
-    param([int]$width, [int]$height, [string]$path)
-    $bmp = New-Object System.Drawing.Bitmap($width, $height)
-    $graphics = [System.Drawing.Graphics]::FromImage($bmp)
-    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $graphics.Clear([System.Drawing.Color]::Transparent)
-    
-    try {
-        $iconPath = "$PWD\Assets\icon.ico"
-        $icon = New-Object System.Drawing.Icon($iconPath, $width, $height)
-        $rect = New-Object System.Drawing.Rectangle(0, 0, $width, $height)
-        $graphics.DrawIcon($icon, $rect)
-    } catch {
-        $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::CornflowerBlue)
-        $rect = New-Object System.Drawing.Rectangle(0, 0, $width, $height)
-        $graphics.FillRectangle($brush, $rect)
-    }
-    
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $graphics.Dispose()
-    $bmp.Dispose()
-}
-
-Create-Image 150 150 "$stagingAssets\Square150x150Logo.png"
-Create-Image 44 44 "$stagingAssets\Square44x44Logo.png"
-Create-Image 50 50 "$stagingAssets\StoreLogo.png"
+# Use pre-generated PNG assets committed to the repo
+$assetSrc = ".\Assets"
+Copy-Item "$assetSrc\Square150x150Logo.png" -Destination "$stagingAssets\Square150x150Logo.png" -Force
+Copy-Item "$assetSrc\Square44x44Logo.png"  -Destination "$stagingAssets\Square44x44Logo.png"  -Force
+Copy-Item "$assetSrc\StoreLogo.png"        -Destination "$stagingAssets\StoreLogo.png"        -Force
 
 Write-Host "Creating MSIX package using makeappx.exe..." -ForegroundColor Cyan
 $makeAppxPath = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
