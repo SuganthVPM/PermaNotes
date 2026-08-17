@@ -68,7 +68,14 @@
 
     /* ---------- Nav ---------- */
     header.nav {
-      padding: 28px 0 0;
+      position: sticky;
+      top: 0;
+      padding: 18px 0;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--canvas-edge);
+      z-index: 100;
     }
 
     .nav-inner {
