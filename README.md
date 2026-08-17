@@ -1,6 +1,24 @@
 # PermaNotes
 
+**Always-on-desktop sticky notes for Windows** — lightweight, offline, and built to stay out of your way.
+
 A lightweight, always-on-desktop sticky note app for Windows. Notes behave like desktop gadgets — they remain visible when you press **Win + D** (Show Desktop), but normal application windows draw over them.
+
+PermaNotes pins rich-text sticky notes directly to your Windows desktop layer, so they're
+always visible (even alongside your icons, shown on Win+D) but never in the way of your
+open windows. Built in WPF on .NET 8, fully local — no accounts, no cloud sync, no telemetry.
+
+## Features
+- Always-on-desktop notes that sit above wallpaper icons but below app windows
+- Rich text (RTF) note content with automatic, debounced saving
+- Runs as a lightweight self-contained executable — no install required
+- System tray access for quick note management
+- 100% offline — your notes never leave your machine
+
+## Why PermaNotes?
+Unlike Windows Sticky Notes or browser-based note apps, PermaNotes notes live directly on
+your desktop layer, so they're always visible without cluttering your taskbar or stealing
+window focus.
 
 ```
 Normal Windows (Chrome / VS Code / Explorer)
