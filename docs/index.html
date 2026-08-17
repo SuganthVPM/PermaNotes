@@ -172,6 +172,9 @@
     font-size: 15.5px;
     box-shadow: 0 10px 24px -8px rgba(30,111,255,0.55);
     transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
   }
   .btn-primary:hover{
     transform: translateY(-2px);
@@ -416,6 +419,15 @@
     border: 1px solid var(--canvas-edge);
     text-align: left;
   }
+  /* Invisible bridge to prevent hover loss over the gap */
+  .dropdown-content::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 18px;
+  }
   .dropdown:hover .dropdown-content,
   .dropdown:focus-within .dropdown-content {
     display: block;
@@ -584,9 +596,9 @@
     <h2>Get PermaNotes.</h2>
     <p>Free, offline, one executable.</p>
     <div class="dropdown">
-      <a class="btn-primary" href="https://github.com/SuganthVPM/PermaNotes/releases/latest" target="_blank" rel="noopener">
+      <button class="btn-primary">
         Download latest release ▾
-      </a>
+      </button>
       <div class="dropdown-content">
         <a href="https://github.com/SuganthVPM/PermaNotes/releases/latest" class="dropdown-item dl-setup">
           <strong>Installer</strong>
