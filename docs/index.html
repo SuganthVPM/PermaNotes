@@ -18,17 +18,17 @@
 
 <style>
   :root{
-    --canvas: #EEF3FA;
-    --canvas-edge: #E2EAF6;
-    --ink: #0B2B66;
-    --ink-soft: #3A4E73;
-    --muted: #64708A;
-    --blue: #1E6FFF;
-    --blue-deep: #0B49C4;
-    --blue-pale: #CFE1FF;
-    --glass: rgba(255,255,255,0.6);
-    --glass-blue: rgba(30,111,255,0.16);
-    --glass-border: rgba(255,255,255,0.75);
+    --canvas: #FAFAFA;
+    --canvas-edge: #E5E7EB;
+    --ink: #111827;
+    --ink-soft: #4B5563;
+    --muted: #6B7280;
+    --blue: #2563EB;
+    --blue-deep: #1D4ED8;
+    --blue-pale: #DBEAFE;
+    --glass: rgba(255,255,255,0.7);
+    --glass-blue: rgba(37,99,235,0.1);
+    --glass-border: rgba(255,255,255,0.8);
     --radius: 16px;
   }
 
@@ -38,8 +38,8 @@
   body{
     margin:0;
     background:
-      radial-gradient(1100px 600px at 82% -10%, #DCE9FF 0%, transparent 60%),
-      radial-gradient(900px 500px at -10% 30%, #E7EFFC 0%, transparent 55%),
+      radial-gradient(1100px 600px at 82% -10%, #EFF6FF 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, #F3F4F6 0%, transparent 55%),
       var(--canvas);
     color: var(--ink);
     font-family: 'Inter', -apple-system, sans-serif;
@@ -208,15 +208,15 @@
     inset: 10px 0 0 10px;
     border-radius: 20px;
     background:
-      linear-gradient(180deg, #DDE9FF 0%, #EAF1FC 100%);
+      linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
     border: 1px solid #FFFFFF;
-    box-shadow: 0 30px 60px -30px rgba(20,50,110,0.35);
+    box-shadow: 0 30px 60px -30px rgba(17,24,39,0.15);
   }
   .grid-dots{
     position:absolute;
     inset:0;
     border-radius: 20px;
-    background-image: radial-gradient(rgba(30,111,255,0.14) 1.4px, transparent 1.4px);
+    background-image: radial-gradient(rgba(37,99,235,0.12) 1.4px, transparent 1.4px);
     background-size: 26px 26px;
     background-position: 14px 14px;
     -webkit-mask-image: linear-gradient(180deg, black, transparent 85%);
@@ -320,7 +320,7 @@
   }
   .panel{
     border-radius: 22px;
-    background: linear-gradient(165deg, #DCE8FF, #F1F6FE);
+    background: linear-gradient(165deg, #F1F5F9, #F8FAFC);
     border: 1px solid #fff;
     padding: 34px;
     position:relative;
