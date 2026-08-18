@@ -111,45 +111,8 @@ namespace DesktopNotes.Views
         public static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
         private PinWindow? _pinWindow;
-        /// <summary>
-        /// When true, the WndProc Z-order guard is temporarily disabled to allow
-        /// intentional Z-order changes (e.g., re-attaching to desktop after click-through).
-        /// </summary>
-        private bool _suppressZOrderGuard = false;
-
-        protected override void OnSourceInitialized(EventArgs e)
-        {
-            base.OnSourceInitialized(e);
-            var hwnd = new WindowInteropHelper(this).Handle;
-            HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
-        }
-
-        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-        {
-            if (msg == 0x0046) // WM_WINDOWPOSCHANGING
-            {
-                // Only guard Z-order when note is in desktop-attached mode and not mid-transition
-                if (!_suppressZOrderGuard && !NoteModel.IsAlwaysOnTop && !NoteModel.IsClickThrough)
-                {
-                    var wp = System.Runtime.InteropServices.Marshal.PtrToStructure<DesktopNotes.Interop.NativeMethods.WINDOWPOS>(lParam);
-                    
-                    // If Z-order is being changed (SWP_NOZORDER not set)
-                    if ((wp.flags & 0x0004U) == 0)
-                    {
-                        // Block the Z-order change so note stays behind normal apps
-                        wp.flags |= 0x0004U; // SWP_NOZORDER
-                        wp.flags |= 0x0200U; // SWP_NOOWNERZORDER
-                        
-                        System.Runtime.InteropServices.Marshal.StructureToPtr(wp, lParam, false);
-                    }
-                }
-            }
-            return IntPtr.Zero;
-        }
-
         internal void SetDesktopZOrder(IntPtr hwndInsertAfter)
         {
-            _suppressZOrderGuard = true;
             try
             {
                 var hwnd = new WindowInteropHelper(this).Handle;
@@ -162,10 +125,7 @@ namespace DesktopNotes.Views
                     );
                 }
             }
-            finally
-            {
-                _suppressZOrderGuard = false;
-            }
+            catch { }
         }
 
 
@@ -634,6 +594,345 @@ namespace DesktopNotes.Views
             }
         }
 
+        private void ContentRichTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (NoteModel.IsLocked) return;
+
+            var pos = e.GetPosition(ContentRichTextBox);
+            var pointer = ContentRichTextBox.GetPositionFromPoint(pos, true);
+            if (pointer != null)
+            {
+                var fwdChar = GetCharFromPointer(pointer, LogicalDirection.Forward);
+                if (fwdChar == '☐' || fwdChar == '☑')
+                {
+                    var tr = new TextRange(pointer, pointer.GetPositionAtOffset(1, LogicalDirection.Forward));
+                    tr.Text = fwdChar == '☐' ? "☑" : "☐";
+                    e.Handled = true;
+                    return;
+                }
+                
+                var bwdChar = GetCharFromPointer(pointer, LogicalDirection.Backward);
+                if (bwdChar == '☐' || bwdChar == '☑')
+                {
+                    var tr = new TextRange(pointer.GetPositionAtOffset(-1, LogicalDirection.Backward), pointer);
+                    tr.Text = bwdChar == '☐' ? "☑" : "☐";
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
+        private char GetCharFromPointer(TextPointer pointer, LogicalDirection dir)
+        {
+            if (pointer.GetPointerContext(dir) == TextPointerContext.Text)
+            {
+                string text = pointer.GetTextInRun(dir);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    return dir == LogicalDirection.Forward ? text[0] : text[text.Length - 1];
+                }
+            }
+            return '\0';
+        }
+
+        private void ContentRichTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (NoteModel.IsLocked) return;
+
+            if (e.Key == Key.Enter)
+            {
+                bool processed = ProcessMarkdownAtCaret(Key.Enter, out bool skipEnterBreak);
+
+                e.Handled = true;
+
+                if (processed && skipEnterBreak)
+                {
+                    // The markdown was a line-prefix (like - or #), so stay on the same line to type the content.
+                    return;
+                }
+                
+                // Let WPF create the new paragraph or list item
+                EditingCommands.EnterParagraphBreak.Execute(null, ContentRichTextBox);
+                
+                // Clear paragraph-level formatting (like large Fonts from Headers)
+                var caret = ContentRichTextBox.CaretPosition;
+                if (caret.Paragraph != null)
+                {
+                    caret.Paragraph.ClearValue(TextElement.FontSizeProperty);
+                    caret.Paragraph.ClearValue(TextElement.FontWeightProperty);
+                    caret.Paragraph.ClearValue(TextElement.FontStyleProperty);
+                }
+
+                // Reset inline typing state (so bold, italic, strikethrough don't bleed)
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
+                ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, System.Windows.Media.Brushes.Transparent);
+                
+                return;
+            }
+
+            if (e.Key == Key.Space)
+            {
+                if (ProcessMarkdownAtCaret(Key.Space, out _))
+                {
+                    e.Handled = true;
+                }
+            }
+        }
+
+        private bool ProcessMarkdownAtCaret(Key triggerKey, out bool skipEnterBreak)
+        {
+            skipEnterBreak = false;
+            
+            var caret = ContentRichTextBox.CaretPosition;
+            var currentParagraph = caret.Paragraph;
+            if (currentParagraph == null) return false;
+
+            var startOfLine = currentParagraph.ContentStart;
+            var textRangeBeforeCaret = new TextRange(startOfLine, caret);
+            var textBeforeCaret = textRangeBeforeCaret.Text;
+
+            // 1. Lists
+            if (textBeforeCaret == "-" || textBeforeCaret == "*")
+            {
+                textRangeBeforeCaret.Text = "";
+                EditingCommands.ToggleBullets.Execute(null, ContentRichTextBox);
+                skipEnterBreak = true;
+                return true;
+            }
+            if (textBeforeCaret == "1.")
+            {
+                textRangeBeforeCaret.Text = "";
+                EditingCommands.ToggleNumbering.Execute(null, ContentRichTextBox);
+                skipEnterBreak = true;
+                return true;
+            }
+
+            // 2. Checkboxes
+            if (textBeforeCaret == "[]")
+            {
+                textRangeBeforeCaret.Text = "☐ ";
+                ContentRichTextBox.CaretPosition = textRangeBeforeCaret.End;
+                skipEnterBreak = true;
+                return true;
+            }
+            if (textBeforeCaret.ToLower() == "[x]")
+            {
+                textRangeBeforeCaret.Text = "☑ ";
+                ContentRichTextBox.CaretPosition = textRangeBeforeCaret.End;
+                skipEnterBreak = true;
+                return true;
+            }
+
+            // 3. Headers
+            if (textBeforeCaret == "#" || textBeforeCaret == "##" || textBeforeCaret == "###")
+            {
+                textRangeBeforeCaret.Text = "";
+                
+                double size = textBeforeCaret == "#" ? 28.0 : textBeforeCaret == "##" ? 22.0 : 18.0;
+                currentParagraph.FontSize = size;
+                currentParagraph.FontWeight = FontWeights.Bold;
+                
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, size);
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
+                
+                skipEnterBreak = true;
+                return true;
+            }
+
+            // 4. Horizontal Rule
+            if (textBeforeCaret == "---")
+            {
+                textRangeBeforeCaret.Text = "────────────────────────────────────────";
+                ContentRichTextBox.CaretPosition = textRangeBeforeCaret.End;
+                // Do not skip enter break here, we want the cursor below the horizontal line
+                return true;
+            }
+
+            // 5. Inline Formatting
+            if (TryApplyInlineFormatting(caret, textBeforeCaret, "**", TextElement.FontWeightProperty, FontWeights.Bold, triggerKey)) return true;
+            if (TryApplyInlineFormatting(caret, textBeforeCaret, "*", TextElement.FontStyleProperty, FontStyles.Italic, triggerKey)) return true;
+            if (TryApplyInlineFormatting(caret, textBeforeCaret, "~~", Inline.TextDecorationsProperty, TextDecorations.Strikethrough, triggerKey)) return true;
+            if (TryApplyInlineFormatting(caret, textBeforeCaret, "==", TextElement.BackgroundProperty, System.Windows.Media.Brushes.Yellow, triggerKey)) return true;
+
+            // 6. Hyperlinks
+            if (TryApplyHyperlink(caret, textBeforeCaret, triggerKey)) return true;
+
+            // 7. Text Replacements
+            if (TryApplyTextReplacement(caret, textBeforeCaret, "--->", "⟶", triggerKey)) return true;
+            if (TryApplyTextReplacement(caret, textBeforeCaret, "-->", "→", triggerKey)) return true;
+            if (TryApplyTextReplacement(caret, textBeforeCaret, "==>", "⇒", triggerKey)) return true;
+
+            return false;
+        }
+
+        private bool TryApplyTextReplacement(TextPointer caret, string textBeforeCaret, string matchText, string replacementText, Key triggerKey)
+        {
+            if (textBeforeCaret.EndsWith(matchText))
+            {
+                TextPointer? startFormat = GetPointerAtBackwardOffset(caret, matchText.Length);
+                if (startFormat != null)
+                {
+                    var formatRange = new TextRange(startFormat, caret);
+                    formatRange.Text = replacementText;
+
+                    ContentRichTextBox.CaretPosition = formatRange.End;
+                    
+                    if (triggerKey == Key.Space)
+                    {
+                        ContentRichTextBox.CaretPosition.InsertTextInRun(" ");
+                        ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool TryApplyInlineFormatting(TextPointer caret, string textBeforeCaret, string delimiter, DependencyProperty property, object value, Key triggerKey)
+        {
+            if (!textBeforeCaret.EndsWith(delimiter)) return false;
+
+            int lastMatch = textBeforeCaret.LastIndexOf(delimiter, textBeforeCaret.Length - 1 - delimiter.Length, StringComparison.Ordinal);
+            if (lastMatch >= 0)
+            {
+                int lengthToReplace = textBeforeCaret.Length - lastMatch;
+                TextPointer? startFormat = GetPointerAtBackwardOffset(caret, lengthToReplace);
+                if (startFormat != null)
+                {
+                    var formatRange = new TextRange(startFormat, caret);
+                    string content = formatRange.Text;
+                    
+                    if (content.StartsWith(delimiter) && content.EndsWith(delimiter) && content.Length > delimiter.Length * 2)
+                    {
+                        var leadingRange = new TextRange(startFormat, startFormat.GetPositionAtOffset(delimiter.Length, LogicalDirection.Forward));
+                        leadingRange.Text = ""; 
+                        
+                        TextPointer? newEnd = GetPointerAtBackwardOffset(caret, delimiter.Length);
+                        if (newEnd != null)
+                        {
+                            var trailingRange = new TextRange(newEnd, caret);
+                            trailingRange.Text = ""; 
+                            
+                            var contentRange = new TextRange(startFormat, newEnd);
+                            contentRange.ApplyPropertyValue(property, value);
+                            
+                            ContentRichTextBox.CaretPosition = contentRange.End;
+                            
+                            if (triggerKey == Key.Space)
+                            {
+                                ContentRichTextBox.CaretPosition.InsertTextInRun(" ");
+                                ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+                            }
+                            
+                            var spaceRange = new TextRange(contentRange.End, ContentRichTextBox.CaretPosition);
+                            spaceRange.ApplyPropertyValue(property, DependencyProperty.UnsetValue);
+                            
+                            if (property == TextElement.FontStyleProperty)
+                            {
+                                spaceRange.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
+                            }
+                            else if (property == TextElement.FontWeightProperty)
+                            {
+                                spaceRange.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
+                            }
+                            else if (property == Inline.TextDecorationsProperty)
+                            {
+                                spaceRange.ApplyPropertyValue(Inline.TextDecorationsProperty, new TextDecorationCollection());
+                            }
+                            else if (property == TextElement.BackgroundProperty)
+                            {
+                                spaceRange.ApplyPropertyValue(TextElement.BackgroundProperty, System.Windows.Media.Brushes.Transparent);
+                            }
+                            
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private bool TryApplyHyperlink(TextPointer caret, string textBeforeCaret, Key triggerKey)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(textBeforeCaret, @"\[([^\]]+)\]\(([^)]+)\)$");
+            if (match.Success)
+            {
+                int lengthToReplace = match.Length;
+                TextPointer? startFormat = GetPointerAtBackwardOffset(caret, lengthToReplace);
+                if (startFormat != null)
+                {
+                    var formatRange = new TextRange(startFormat, caret);
+                    formatRange.Text = ""; // Clear markdown text
+
+                    string linkText = match.Groups[1].Value;
+                    string linkUrl = match.Groups[2].Value;
+                    
+                    if (!linkUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
+                        !linkUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                        !linkUrl.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        linkUrl = "https://" + linkUrl;
+                    }
+
+                    Hyperlink hyperlink = new Hyperlink(new Run(linkText), startFormat);
+                    hyperlink.ToolTip = "Ctrl+Click to follow link";
+                    
+                    try
+                    {
+                        hyperlink.NavigateUri = new Uri(linkUrl, UriKind.Absolute);
+                    }
+                    catch { /* Ignore invalid URI formats */ }
+
+                    hyperlink.RequestNavigate += (sender, args) =>
+                    {
+                        try
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(args.Uri.AbsoluteUri) { UseShellExecute = true });
+                        }
+                        catch { }
+                        args.Handled = true;
+                    };
+
+                    ContentRichTextBox.CaretPosition = hyperlink.ElementEnd;
+
+                    if (triggerKey == Key.Space)
+                    {
+                        ContentRichTextBox.CaretPosition.InsertTextInRun(" ");
+                        ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+                    }
+
+                    // Reset inline formatting so subsequent text isn't treated as part of the link
+                    ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
+                    ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, System.Windows.Media.Brushes.Black);
+
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private TextPointer? GetPointerAtBackwardOffset(TextPointer pointer, int charCount)
+        {
+            TextPointer? current = pointer;
+            int charsFound = 0;
+            while (current != null && charsFound < charCount)
+            {
+                if (current.GetPointerContext(LogicalDirection.Backward) == TextPointerContext.Text)
+                {
+                    int runLength = current.GetTextInRun(LogicalDirection.Backward).Length;
+                    if (charsFound + runLength >= charCount)
+                    {
+                        return current.GetPositionAtOffset(-(charCount - charsFound), LogicalDirection.Backward);
+                    }
+                    charsFound += runLength;
+                }
+                current = current.GetNextContextPosition(LogicalDirection.Backward);
+            }
+            return current;
+        }
+
         private static T? GetDescendantByType<T>(DependencyObject depObj) where T : DependencyObject
         {
             if (depObj == null) return null;
@@ -756,7 +1055,6 @@ namespace DesktopNotes.Views
                 LockNoteBtn.ToolTip = "Unlock Note";
                 
                 ContentRichTextBox.IsReadOnly = true;
-                ResizeMode = ResizeMode.NoResize;
                 TitleBlock.Cursor = System.Windows.Input.Cursors.Arrow;
                 FormatPopup.IsOpen = false;
             }
@@ -767,7 +1065,6 @@ namespace DesktopNotes.Views
                 LockNoteBtn.ToolTip = "Lock Note";
                 
                 ContentRichTextBox.IsReadOnly = false;
-                ResizeMode = ResizeMode.CanResize;
                 TitleBlock.Cursor = System.Windows.Input.Cursors.IBeam;
             }
         }
@@ -988,35 +1285,25 @@ namespace DesktopNotes.Views
             }
             else
             {
-                // Temporarily disable the Z-order guard so all the transitions
-                // (Topmost change, owner re-attachment, SetWindowPos) go through.
-                _suppressZOrderGuard = true;
-                try
+                // Remove WS_EX_TRANSPARENT
+                SetWindowLong(hwnd, GWL_EXSTYLE, style & ~WS_EX_TRANSPARENT);
+
+                // Restore Topmost to whatever the user originally had
+                Topmost = NoteModel.IsAlwaysOnTop;
+
+                if (_pinWindow != null)
                 {
-                    // Remove WS_EX_TRANSPARENT
-                    SetWindowLong(hwnd, GWL_EXSTYLE, style & ~WS_EX_TRANSPARENT);
-
-                    // Restore Topmost to whatever the user originally had
-                    Topmost = NoteModel.IsAlwaysOnTop;
-
-                    if (_pinWindow != null)
-                    {
-                        _pinWindow.Close();
-                        _pinWindow = null;
-                    }
-
-                    if (clickThroughMenuItem != null)
-                    {
-                        clickThroughMenuItem.Header = "Enable Click-Through";
-                    }
-
-                    // Fire event so App.xaml.cs re-attaches to desktop (sets owner + HWND_BOTTOM)
-                    AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
+                    _pinWindow.Close();
+                    _pinWindow = null;
                 }
-                finally
+
+                if (clickThroughMenuItem != null)
                 {
-                    _suppressZOrderGuard = false;
+                    clickThroughMenuItem.Header = "Enable Click-Through";
                 }
+
+                // Fire event so App.xaml.cs re-attaches to desktop (sets owner + HWND_BOTTOM)
+                AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -1038,20 +1325,12 @@ namespace DesktopNotes.Views
         {
             if (sender is MenuItem menuItem)
             {
-                _suppressZOrderGuard = true;
-                try
-                {
-                    NoteModel.IsAlwaysOnTop = menuItem.IsChecked;
-                    Topmost = NoteModel.IsAlwaysOnTop;
-                    NoteModel.UpdatedAt = DateTime.Now;
-                    AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
-                    NoteChanged?.Invoke(this, EventArgs.Empty);
-                    ShowSavedIndicator();
-                }
-                finally
-                {
-                    _suppressZOrderGuard = false;
-                }
+                NoteModel.IsAlwaysOnTop = menuItem.IsChecked;
+                Topmost = NoteModel.IsAlwaysOnTop;
+                NoteModel.UpdatedAt = DateTime.Now;
+                AlwaysOnTopChanged?.Invoke(this, EventArgs.Empty);
+                NoteChanged?.Invoke(this, EventArgs.Empty);
+                ShowSavedIndicator();
             }
         }
 
@@ -1080,6 +1359,18 @@ namespace DesktopNotes.Views
         private void SettingsMenu_Click(object sender, RoutedEventArgs e)
         {
             RequestSettings?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ResizeGrip_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        {
+            double newWidth = this.Width + e.HorizontalChange;
+            double newHeight = this.Height + e.VerticalChange;
+            
+            if (newWidth >= this.MinWidth)
+                this.Width = newWidth;
+                
+            if (newHeight >= this.MinHeight)
+                this.Height = newHeight;
         }
     }
 }

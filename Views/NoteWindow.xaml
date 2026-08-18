@@ -7,7 +7,7 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        ResizeMode="CanResize"
+        ResizeMode="NoResize"
         ShowInTaskbar="False"
         WindowStartupLocation="Manual"
         UseLayoutRounding="True"
@@ -19,11 +19,14 @@
         KeyDown="Window_KeyDown"
         ContextMenu="{DynamicResource NoteContextMenu}">
 
-    <WindowChrome.WindowChrome>
-        <WindowChrome ResizeBorderThickness="20" CaptionHeight="0" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
-    </WindowChrome.WindowChrome>
-
     <Window.Resources>
+        <Style TargetType="{x:Type Paragraph}">
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+        <Style TargetType="{x:Type List}">
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
         <!-- Full Context Menu -->
         <ContextMenu x:Key="NoteContextMenu" Opened="ContextMenu_Opened">
             <!-- Context Menu (Reorganized) -->
@@ -122,7 +125,28 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border CornerRadius="3" Background="#40000000" Margin="2,0,2,0" />
+                        <Border x:Name="ThumbBorder" HorizontalAlignment="Right" Margin="0,0,2,0">
+                            <!-- Animation for smooth width expansion -->
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Width" Value="4"/>
+                                    <Setter Property="Background" Value="#40000000"/>
+                                    <Setter Property="CornerRadius" Value="2"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Thumb}}" Value="True">
+                                            <Setter Property="Width" Value="10"/>
+                                            <Setter Property="Background" Value="#60000000"/>
+                                            <Setter Property="CornerRadius" Value="5"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsDragging, RelativeSource={RelativeSource AncestorType=Thumb}}" Value="True">
+                                            <Setter Property="Width" Value="10"/>
+                                            <Setter Property="Background" Value="#90000000"/>
+                                            <Setter Property="CornerRadius" Value="5"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                        </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -131,7 +155,6 @@
         <Style TargetType="ScrollBar">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="10"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
@@ -333,10 +356,22 @@
                              Cursor="Arrow"
                              PreviewMouseWheel="ContentRichTextBox_PreviewMouseWheel"
                              PreviewMouseUp="ContentRichTextBox_PreviewMouseUp"
+                             PreviewMouseLeftButtonDown="ContentRichTextBox_PreviewMouseLeftButtonDown"
+                             PreviewKeyDown="ContentRichTextBox_PreviewKeyDown"
                              SelectionChanged="ContentRichTextBox_SelectionChanged"
                              TextChanged="ContentRichTextBox_TextChanged"
+                             IsDocumentEnabled="True"
                              ContextMenu="{DynamicResource NoteContextMenu}">
                 </RichTextBox>
+
+                <!-- Custom Resize Grip to prevent DWM crashes -->
+                <Thumb Grid.Row="1" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Background="Transparent" DragDelta="ResizeGrip_DragDelta">
+                    <Thumb.Template>
+                        <ControlTemplate>
+                            <Border Background="Transparent"/>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
             </Grid>
         </Border>
 
