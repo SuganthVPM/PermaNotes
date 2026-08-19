@@ -17,6 +17,7 @@
     <!-- Optimizations -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
 </Project>

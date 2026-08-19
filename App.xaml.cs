@@ -306,17 +306,7 @@ namespace DesktopNotes
         /// </summary>
         internal void RefreshDesktopZOrder()
         {
-            // Iterate from newest to oldest. 
-            // Pushing a note to HWND_BOTTOM puts it under all previously pushed notes.
-            // By pushing the newest first, it ends up above the older notes.
-            for (int i = _activeNoteWindows.Count - 1; i >= 0; i--)
-            {
-                var window = _activeNoteWindows[i];
-                if (!window.NoteModel.IsAlwaysOnTop && !window.NoteModel.IsClickThrough)
-                {
-                    window.SetDesktopZOrder(DesktopNotes.Interop.NativeMethods.HWND_BOTTOM);
-                }
-            }
+            // Owner relationship with WorkerW handles desktop layer Z-ordering naturally.
         }
 
         /// <summary>
@@ -530,10 +520,10 @@ namespace DesktopNotes
             {
                 try
                 {
-                    var sourceFile = Path.Combine(LogDir, "notes.json");
-                    if (File.Exists(sourceFile))
+                    if (_allNotes.Count > 0)
                     {
-                        File.Copy(sourceFile, sfd.FileName, true);
+                        var json = System.Text.Json.JsonSerializer.Serialize(_allNotes, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                        File.WriteAllText(sfd.FileName, json);
                         MessageBox.Show("Notes exported successfully.", "Export Notes", MessageBoxButton.OK, MessageBoxImage.Information);
                     }
                     else

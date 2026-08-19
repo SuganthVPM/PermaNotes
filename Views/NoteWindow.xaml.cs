@@ -141,6 +141,9 @@ namespace DesktopNotes.Views
             LocationChanged += NoteWindow_LocationChanged;
             SizeChanged += NoteWindow_SizeChanged;
 
+            System.Windows.DataObject.AddPastingHandler(ContentRichTextBox, ContentRichTextBox_Pasting);
+            ContentRichTextBox.AddHandler(UIElement.QueryCursorEvent, new System.Windows.Input.QueryCursorEventHandler(ContentRichTextBox_QueryCursor), true);
+
             if (TryFindResource("NoteContextMenu") is ContextMenu cm)
             {
                 foreach (var item in cm.Items)
@@ -170,6 +173,7 @@ namespace DesktopNotes.Views
                 ContentRichTextBox.Document.Blocks.Add(new Paragraph(new Run(NoteModel.Text)));
             }
 
+            SanitizeDocumentBackgrounds();
             ApplyBackgroundColor(NoteModel.BackgroundColor);
             UpdateLockUI();
             ApplyClickThroughState(); // restore persisted click-through state
@@ -225,8 +229,12 @@ namespace DesktopNotes.Views
 
                 TitleBlock.Foreground = headerColor;
                 TitleEditBox.Foreground = headerColor;
+                TitleBlock.Cursor = GetHighContrastIBeamCursor();
+                TitleEditBox.Cursor = GetHighContrastIBeamCursor();
+                TitleEditBox.CaretBrush = textColor;
                 ContentRichTextBox.Foreground = textColor;
-                ContentRichTextBox.CaretBrush = textColor; // Cursor color for the I-beam replacement
+                ContentRichTextBox.CaretBrush = textColor;
+                ContentRichTextBox.Cursor = GetHighContrastIBeamCursor();
                 
                 UpdateTextContrast(textColor);
 
@@ -248,8 +256,12 @@ namespace DesktopNotes.Views
 
                 TitleBlock.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
                 TitleEditBox.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
+                TitleBlock.Cursor = GetHighContrastIBeamCursor();
+                TitleEditBox.Cursor = GetHighContrastIBeamCursor();
+                TitleEditBox.CaretBrush = TitleBlock.Foreground;
                 ContentRichTextBox.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x22, 0x22));
                 ContentRichTextBox.CaretBrush = ContentRichTextBox.Foreground;
+                ContentRichTextBox.Cursor = GetHighContrastIBeamCursor();
                 
                 UpdateTextContrast((SolidColorBrush)ContentRichTextBox.Foreground);
                 
@@ -529,15 +541,73 @@ namespace DesktopNotes.Views
             return false;
         }
 
+        private void SanitizeDocumentBackgrounds()
+        {
+            try
+            {
+                var modernYellow = System.Windows.Media.Color.FromArgb(0x70, 0xFF, 0xEB, 0x3B);
+                var yellowColor = System.Windows.Media.Colors.Yellow;
+
+                TextPointer? pointer = ContentRichTextBox.Document.ContentStart;
+                while (pointer != null)
+                {
+                    if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart)
+                    {
+                        if (pointer.GetAdjacentElement(LogicalDirection.Forward) is TextElement element)
+                        {
+                            if (element.Background is SolidColorBrush bg)
+                            {
+                                bool isHighlight = (bg.Color == yellowColor) ||
+                                                   (bg.Color == modernYellow) ||
+                                                   (bg.Color.R >= 220 && bg.Color.G >= 180 && bg.Color.B <= 100);
+
+                                if (!isHighlight)
+                                {
+                                    element.ClearValue(TextElement.BackgroundProperty);
+                                }
+                            }
+                        }
+                    }
+                    pointer = pointer.GetNextContextPosition(LogicalDirection.Forward);
+                }
+
+                foreach (var block in ContentRichTextBox.Document.Blocks)
+                {
+                    if (block.Background is SolidColorBrush blockBg)
+                    {
+                        bool isHighlight = (blockBg.Color == yellowColor) ||
+                                           (blockBg.Color == modernYellow) ||
+                                           (blockBg.Color.R >= 220 && blockBg.Color.G >= 180 && blockBg.Color.B <= 100);
+                        if (!isHighlight)
+                        {
+                            block.ClearValue(Block.BackgroundProperty);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void ContentRichTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+        {
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+            {
+                SanitizeDocumentBackgrounds();
+                TriggerNoteSave();
+            }));
+        }
+
         private void UpdateTextContrast(SolidColorBrush defaultTextColor)
         {
             var darkText = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x22, 0x22));
             
+            SanitizeDocumentBackgrounds();
+
             // First apply default to the entire document
             var fullRange = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
             fullRange.ApplyPropertyValue(TextElement.ForegroundProperty, defaultTextColor);
 
-            // Then iterate to find yellow backgrounds and fix them
+            // Then iterate to find yellow backgrounds and ensure high-contrast dark text
             TextPointer? pointer = ContentRichTextBox.Document.ContentStart;
             while (pointer != null)
             {
@@ -546,7 +616,7 @@ namespace DesktopNotes.Views
                     if (pointer.GetAdjacentElement(LogicalDirection.Forward) is TextElement element)
                     {
                         var modernYellow = System.Windows.Media.Color.FromArgb(0x70, 0xFF, 0xEB, 0x3B);
-                        if (element.Background is SolidColorBrush bg && (bg.Color == System.Windows.Media.Colors.Yellow || bg.Color == modernYellow))
+                        if (element.Background is SolidColorBrush bg && (bg.Color == System.Windows.Media.Colors.Yellow || bg.Color == modernYellow || (bg.Color.R >= 220 && bg.Color.G >= 180 && bg.Color.B <= 100)))
                         {
                             element.Foreground = darkText;
                         }
@@ -594,43 +664,174 @@ namespace DesktopNotes.Views
             }
         }
 
+        private void ContentRichTextBox_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (NoteModel.IsLocked)
+            {
+                if (System.Windows.Input.Mouse.OverrideCursor != null)
+                    System.Windows.Input.Mouse.OverrideCursor = null;
+                return;
+            }
+
+            var pos = e.GetPosition(ContentRichTextBox);
+            if (IsHoveringCheckbox(pos))
+            {
+                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Arrow;
+            }
+            else if (System.Windows.Input.Mouse.OverrideCursor == System.Windows.Input.Cursors.Arrow)
+            {
+                System.Windows.Input.Mouse.OverrideCursor = null;
+            }
+        }
+
+        private void ContentRichTextBox_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (System.Windows.Input.Mouse.OverrideCursor == System.Windows.Input.Cursors.Arrow)
+            {
+                System.Windows.Input.Mouse.OverrideCursor = null;
+            }
+        }
+
+        private void ContentRichTextBox_QueryCursor(object sender, System.Windows.Input.QueryCursorEventArgs e)
+        {
+            if (NoteModel.IsLocked)
+            {
+                e.Cursor = System.Windows.Input.Cursors.Arrow;
+                e.Handled = true;
+                return;
+            }
+
+            var pos = System.Windows.Input.Mouse.GetPosition(ContentRichTextBox);
+            if (IsHoveringCheckbox(pos))
+            {
+                e.Cursor = System.Windows.Input.Cursors.Arrow;
+                e.Handled = true;
+                return;
+            }
+
+            e.Cursor = GetHighContrastIBeamCursor();
+            e.Handled = true;
+        }
+
+        private bool IsHoveringCheckbox(System.Windows.Point pos)
+        {
+            return TryGetCheckboxAtPoint(pos, out _, out _);
+        }
+
+        private bool TryGetCheckboxAtPoint(System.Windows.Point pos, out TextRange? checkboxRange, out char checkboxChar)
+        {
+            checkboxRange = null;
+            checkboxChar = '\0';
+
+            try
+            {
+                var pointer = ContentRichTextBox.GetPositionFromPoint(pos, true);
+                if (pointer == null) return false;
+
+                // 1. Line start check (Most common: checkbox is first char of paragraph)
+                var para = pointer.Paragraph;
+                if (para != null)
+                {
+                    var startPtr = para.ContentStart;
+                    var firstChar = GetCharFromPointer(startPtr, LogicalDirection.Forward);
+                    if (firstChar == '☐' || firstChar == '☑')
+                    {
+                        var startRect = startPtr.GetCharacterRect(LogicalDirection.Forward);
+                        // Tight bounding box: roughly 20px wide from line start (square is ~15px)
+                        var boxRect = new Rect(startRect.X - 2, startRect.Y - 2, 20, Math.Max(startRect.Height + 4, 18));
+                        if (boxRect.Contains(pos))
+                        {
+                            var textPtr = startPtr.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text 
+                                ? startPtr 
+                                : startPtr.GetNextInsertionPosition(LogicalDirection.Forward) ?? startPtr;
+                            checkboxRange = new TextRange(textPtr, textPtr.GetPositionAtOffset(1, LogicalDirection.Forward));
+                            checkboxChar = firstChar;
+                            return true;
+                        }
+                    }
+                }
+
+                // 2. Exact pointer check: Left half of square
+                var fwdChar = GetCharFromPointer(pointer, LogicalDirection.Forward);
+                if (fwdChar == '☐' || fwdChar == '☑')
+                {
+                    var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                    rect.Inflate(2, 4);
+                    if (rect.Contains(pos))
+                    {
+                        var textPtr = pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text 
+                            ? pointer 
+                            : pointer.GetNextInsertionPosition(LogicalDirection.Forward) ?? pointer;
+                        checkboxRange = new TextRange(textPtr, textPtr.GetPositionAtOffset(1, LogicalDirection.Forward));
+                        checkboxChar = fwdChar;
+                        return true;
+                    }
+                }
+
+                // 3. Exact pointer check: Right half of square
+                var bwdChar = GetCharFromPointer(pointer, LogicalDirection.Backward);
+                if (bwdChar == '☐' || bwdChar == '☑')
+                {
+                    var rect = pointer.GetCharacterRect(LogicalDirection.Backward);
+                    // In WPF, Backward rect is at trailing edge (0-width). Glyph is to the left (~15px).
+                    var hitRect = new Rect(rect.X - 16, rect.Y - 4, 20, rect.Height + 8);
+                    if (hitRect.Contains(pos))
+                    {
+                        var textPtr = pointer.GetPointerContext(LogicalDirection.Backward) == TextPointerContext.Text 
+                            ? pointer 
+                            : pointer.GetNextInsertionPosition(LogicalDirection.Backward) ?? pointer;
+                        checkboxRange = new TextRange(textPtr.GetPositionAtOffset(-1, LogicalDirection.Backward), textPtr);
+                        checkboxChar = bwdChar;
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
         private void ContentRichTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (NoteModel.IsLocked) return;
 
             var pos = e.GetPosition(ContentRichTextBox);
-            var pointer = ContentRichTextBox.GetPositionFromPoint(pos, true);
-            if (pointer != null)
+            if (TryGetCheckboxAtPoint(pos, out var range, out char currentChar) && range != null)
             {
-                var fwdChar = GetCharFromPointer(pointer, LogicalDirection.Forward);
-                if (fwdChar == '☐' || fwdChar == '☑')
-                {
-                    var tr = new TextRange(pointer, pointer.GetPositionAtOffset(1, LogicalDirection.Forward));
-                    tr.Text = fwdChar == '☐' ? "☑" : "☐";
-                    e.Handled = true;
-                    return;
-                }
-                
-                var bwdChar = GetCharFromPointer(pointer, LogicalDirection.Backward);
-                if (bwdChar == '☐' || bwdChar == '☑')
-                {
-                    var tr = new TextRange(pointer.GetPositionAtOffset(-1, LogicalDirection.Backward), pointer);
-                    tr.Text = bwdChar == '☐' ? "☑" : "☐";
-                    e.Handled = true;
-                    return;
-                }
+                range.Text = currentChar == '☐' ? "☑" : "☐";
+                e.Handled = true;
+                TriggerNoteSave();
             }
+        }
+
+        private void TriggerNoteSave()
+        {
+            var range = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
+            using var ms = new MemoryStream();
+            range.Save(ms, System.Windows.DataFormats.Rtf);
+            NoteModel.RtfText = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+            NoteModel.Text = range.Text;
+            NoteModel.UpdatedAt = DateTime.Now;
+            NoteChanged?.Invoke(this, EventArgs.Empty);
+            ShowSavedIndicator();
         }
 
         private char GetCharFromPointer(TextPointer pointer, LogicalDirection dir)
         {
-            if (pointer.GetPointerContext(dir) == TextPointerContext.Text)
+            if (pointer == null) return '\0';
+
+            var textPointer = pointer;
+            if (textPointer.GetPointerContext(dir) != TextPointerContext.Text)
             {
-                string text = pointer.GetTextInRun(dir);
-                if (!string.IsNullOrEmpty(text))
-                {
-                    return dir == LogicalDirection.Forward ? text[0] : text[text.Length - 1];
-                }
+                textPointer = textPointer.GetNextInsertionPosition(dir);
+                if (textPointer == null || textPointer.GetPointerContext(dir) != TextPointerContext.Text)
+                    return '\0';
+            }
+
+            string text = textPointer.GetTextInRun(dir);
+            if (!string.IsNullOrEmpty(text))
+            {
+                return dir == LogicalDirection.Forward ? text[0] : text[text.Length - 1];
             }
             return '\0';
         }
@@ -641,6 +842,28 @@ namespace DesktopNotes.Views
 
             if (e.Key == Key.Enter)
             {
+                var caret = ContentRichTextBox.CaretPosition;
+                var currentParagraph = caret.Paragraph;
+
+                // Check if we are in an empty list item to exit list mode
+                if (currentParagraph != null && currentParagraph.Parent is ListItem listItem)
+                {
+                    var textRange = new TextRange(currentParagraph.ContentStart, currentParagraph.ContentEnd);
+                    if (string.IsNullOrWhiteSpace(textRange.Text))
+                    {
+                        if (listItem.Parent is System.Windows.Documents.List list && list.MarkerStyle == TextMarkerStyle.Decimal)
+                        {
+                            EditingCommands.ToggleNumbering.Execute(null, ContentRichTextBox);
+                        }
+                        else
+                        {
+                            EditingCommands.ToggleBullets.Execute(null, ContentRichTextBox);
+                        }
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
                 bool processed = ProcessMarkdownAtCaret(Key.Enter, out bool skipEnterBreak);
 
                 e.Handled = true;
@@ -655,7 +878,6 @@ namespace DesktopNotes.Views
                 EditingCommands.EnterParagraphBreak.Execute(null, ContentRichTextBox);
                 
                 // Clear paragraph-level formatting (like large Fonts from Headers)
-                var caret = ContentRichTextBox.CaretPosition;
                 if (caret.Paragraph != null)
                 {
                     caret.Paragraph.ClearValue(TextElement.FontSizeProperty);
@@ -806,6 +1028,12 @@ namespace DesktopNotes.Views
                     
                     if (content.StartsWith(delimiter) && content.EndsWith(delimiter) && content.Length > delimiter.Length * 2)
                     {
+                        string inner = content.Substring(delimiter.Length, content.Length - (delimiter.Length * 2));
+                        if (string.IsNullOrWhiteSpace(inner) || inner.StartsWith(" ") || inner.EndsWith(" "))
+                        {
+                            return false;
+                        }
+
                         var leadingRange = new TextRange(startFormat, startFormat.GetPositionAtOffset(delimiter.Length, LogicalDirection.Forward));
                         leadingRange.Text = ""; 
                         
@@ -905,7 +1133,7 @@ namespace DesktopNotes.Views
 
                     // Reset inline formatting so subsequent text isn't treated as part of the link
                     ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
-                    ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, System.Windows.Media.Brushes.Black);
+                    ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, ContentRichTextBox.Foreground ?? System.Windows.Media.Brushes.Black);
 
                     return true;
                 }
@@ -1056,6 +1284,7 @@ namespace DesktopNotes.Views
                 
                 ContentRichTextBox.IsReadOnly = true;
                 TitleBlock.Cursor = System.Windows.Input.Cursors.Arrow;
+                ResizeGrid.Visibility = Visibility.Collapsed;
                 FormatPopup.IsOpen = false;
             }
             else
@@ -1065,7 +1294,8 @@ namespace DesktopNotes.Views
                 LockNoteBtn.ToolTip = "Lock Note";
                 
                 ContentRichTextBox.IsReadOnly = false;
-                TitleBlock.Cursor = System.Windows.Input.Cursors.IBeam;
+                TitleBlock.Cursor = GetHighContrastIBeamCursor();
+                ResizeGrid.Visibility = Visibility.Visible;
             }
         }
 
@@ -1361,16 +1591,192 @@ namespace DesktopNotes.Views
             RequestSettings?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ResizeGrip_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        private void ResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
         {
-            double newWidth = this.Width + e.HorizontalChange;
-            double newHeight = this.Height + e.VerticalChange;
-            
-            if (newWidth >= this.MinWidth)
-                this.Width = newWidth;
-                
-            if (newHeight >= this.MinHeight)
-                this.Height = newHeight;
+            if (NoteModel.IsLocked) return;
+            if (sender is not FrameworkElement thumb || thumb.Tag is not string direction) return;
+
+            double minW = MinWidth > 0 ? MinWidth : 200;
+            double minH = MinHeight > 0 ? MinHeight : 150;
+
+            // Right edge / corners
+            if (direction.Contains("Right"))
+            {
+                double newWidth = Width + e.HorizontalChange;
+                if (newWidth >= minW)
+                {
+                    Width = newWidth;
+                }
+            }
+
+            // Left edge / corners
+            if (direction.Contains("Left"))
+            {
+                double newWidth = Width - e.HorizontalChange;
+                if (newWidth >= minW)
+                {
+                    Width = newWidth;
+                    Left += e.HorizontalChange;
+                }
+                else
+                {
+                    double diff = Width - minW;
+                    Left += diff;
+                    Width = minW;
+                }
+            }
+
+            // Bottom edge / corners
+            if (direction.Contains("Bottom"))
+            {
+                double newHeight = Height + e.VerticalChange;
+                if (newHeight >= minH)
+                {
+                    Height = newHeight;
+                }
+            }
+
+            // Top edge / corners
+            if (direction.Contains("Top"))
+            {
+                double newHeight = Height - e.VerticalChange;
+                if (newHeight >= minH)
+                {
+                    Height = newHeight;
+                    Top += e.VerticalChange;
+                }
+                else
+                {
+                    double diff = Height - minH;
+                    Top += diff;
+                    Height = minH;
+                }
+            }
+
+            UpdatePositionAndSize();
+        }
+
+        private static System.Windows.Input.Cursor? _highContrastIBeamCursor;
+
+        private static System.Windows.Input.Cursor GetHighContrastIBeamCursor()
+        {
+            if (_highContrastIBeamCursor != null) return _highContrastIBeamCursor;
+
+            try
+            {
+                int width = 32;
+                int height = 32;
+
+                // 1. Render modern anti-aliased Fluent I-Beam into 32-bit ARGB bitmap
+                using var bmp = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(bmp))
+                {
+                    g.Clear(System.Drawing.Color.Transparent);
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+
+                    // Layer 1: Soft ambient drop shadow
+                    using (var shadowPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(60, 0, 0, 0), 3.4f))
+                    {
+                        shadowPen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                        shadowPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                        g.DrawLine(shadowPen, 16f, 9.5f, 16f, 22.5f);
+                        g.DrawLine(shadowPen, 13.5f, 9.5f, 18.5f, 9.5f);
+                        g.DrawLine(shadowPen, 13.5f, 22.5f, 18.5f, 22.5f);
+                    }
+
+                    // Layer 2: Subtle crisp contour for light background separation
+                    using (var contourPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(160, 0, 0, 0), 2.2f))
+                    {
+                        contourPen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                        contourPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                        g.DrawLine(contourPen, 16f, 9.5f, 16f, 22.5f);
+                        g.DrawLine(contourPen, 13.5f, 9.5f, 18.5f, 9.5f);
+                        g.DrawLine(contourPen, 13.5f, 22.5f, 18.5f, 22.5f);
+                    }
+
+                    // Layer 3: Solid luminous white center stem & serifs
+                    using (var whitePen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(255, 255, 255, 255), 1.2f))
+                    {
+                        whitePen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                        whitePen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                        g.DrawLine(whitePen, 16f, 9.5f, 16f, 22.5f);
+                        g.DrawLine(whitePen, 14f, 9.5f, 18f, 9.5f);
+                        g.DrawLine(whitePen, 14f, 22.5f, 18f, 22.5f);
+                    }
+                }
+
+                // 2. Package 32-bit ARGB bitmap into standard .cur binary stream
+                int imageSize = width * height * 4;
+                int andMaskSize = (width * height) / 8;
+                int totalResSize = 40 + imageSize + andMaskSize;
+                int totalFileSize = 22 + totalResSize;
+
+                byte[] curBytes = new byte[totalFileSize];
+                using (var ms = new MemoryStream(curBytes))
+                using (var bw = new BinaryWriter(ms))
+                {
+                    // ICONDIR
+                    bw.Write((short)0);          // Reserved
+                    bw.Write((short)2);          // 2 = CURSOR
+                    bw.Write((short)1);          // 1 image
+
+                    // ICONDIRENTRY
+                    bw.Write((byte)width);       // Width (32)
+                    bw.Write((byte)height);      // Height (32)
+                    bw.Write((byte)0);           // Colors
+                    bw.Write((byte)0);           // Reserved
+                    bw.Write((short)16);         // Hotspot X
+                    bw.Write((short)16);         // Hotspot Y
+                    bw.Write((int)totalResSize); // Resource size
+                    bw.Write((int)22);           // Offset to BITMAPINFOHEADER
+
+                    // BITMAPINFOHEADER
+                    bw.Write((int)40);           // Header size
+                    bw.Write((int)width);        // Width (32)
+                    bw.Write((int)(height * 2)); // Height (64 for XOR + AND)
+                    bw.Write((short)1);          // Planes
+                    bw.Write((short)32);         // 32-bit ARGB
+                    bw.Write((int)0);            // Compression (BI_RGB)
+                    bw.Write((int)(imageSize + andMaskSize));
+                    bw.Write((int)0);            // XPelsPerMeter
+                    bw.Write((int)0);            // YPelsPerMeter
+                    bw.Write((int)0);            // Colors used
+                    bw.Write((int)0);            // Important colors
+
+                    // Pixel data (bottom-up scanlines in BGRA format)
+                    var bmpData = bmp.LockBits(
+                        new System.Drawing.Rectangle(0, 0, width, height),
+                        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    try
+                    {
+                        byte[] row = new byte[width * 4];
+                        for (int y = height - 1; y >= 0; y--)
+                        {
+                            System.Runtime.InteropServices.Marshal.Copy(
+                                IntPtr.Add(bmpData.Scan0, y * bmpData.Stride),
+                                row, 0, row.Length);
+                            bw.Write(row);
+                        }
+                    }
+                    finally
+                    {
+                        bmp.UnlockBits(bmpData);
+                    }
+
+                    // AND mask (all zeros for 32-bit alpha channel transparency)
+                    byte[] andMask = new byte[andMaskSize];
+                    bw.Write(andMask);
+                }
+
+                using var stream = new MemoryStream(curBytes);
+                _highContrastIBeamCursor = new System.Windows.Input.Cursor(stream);
+                return _highContrastIBeamCursor;
+            }
+            catch { }
+
+            return System.Windows.Input.Cursors.IBeam;
         }
     }
 }

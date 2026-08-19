@@ -186,6 +186,7 @@ namespace DesktopNotes.Services
                         try
                         {
                             note.RtfText = File.ReadAllText(file);
+                            note.Text = ExtractPlainTextFromRtf(note.RtfText);
                         }
                         catch { }
 
@@ -288,11 +289,44 @@ namespace DesktopNotes.Services
                     IsAlwaysOnTop = n.IsAlwaysOnTop,
                     IsClosed = n.IsClosed,
                     IsLocked = n.IsLocked,
+                    IsClickThrough = n.IsClickThrough,
                     CreatedAt = n.CreatedAt,
                     UpdatedAt = n.UpdatedAt
                 });
             }
             return cloned;
+        }
+
+        private string ExtractPlainTextFromRtf(string rtf)
+        {
+            if (string.IsNullOrWhiteSpace(rtf)) return string.Empty;
+            try
+            {
+                // Remove font tables, color tables, stylesheets, etc.
+                string text = System.Text.RegularExpressions.Regex.Replace(rtf, @"\{\\fonttbl[\s\S]*?\}|\{\\colortbl[\s\S]*?\}|\{\\stylesheet[\s\S]*?\}|\{\\\*[\s\S]*?\}", string.Empty);
+                // Replace \par and \line with newlines
+                text = System.Text.RegularExpressions.Regex.Replace(text, @"\\par|\\line", "\r\n");
+                // Replace \tab with space
+                text = text.Replace("\\tab", " ");
+                // Handle unicode characters \uN?
+                text = System.Text.RegularExpressions.Regex.Replace(text, @"\\u(-?\d+)\??", m =>
+                {
+                    if (short.TryParse(m.Groups[1].Value, out short code))
+                    {
+                        return ((char)code).ToString();
+                    }
+                    return string.Empty;
+                });
+                // Remove remaining RTF control words (\b, \fs20, etc.)
+                text = System.Text.RegularExpressions.Regex.Replace(text, @"\\[a-zA-Z]+\-?\d*\s?", string.Empty);
+                // Remove braces
+                text = text.Replace("{", "").Replace("}", "").Trim();
+                return text;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 }

@@ -117,6 +117,30 @@ namespace DesktopNotes.Interop
             public uint dwFlags;
         }
 
+        // --- Custom Cursor / Icon creation ---
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ICONINFO
+        {
+            public bool fIcon;
+            public int xHotspot;
+            public int yHotspot;
+            public IntPtr hbmMask;
+            public IntPtr hbmColor;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr CreateIconIndirect(ref ICONINFO icon);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool DestroyIcon(IntPtr hIcon);
+
+        [DllImport("gdi32.dll", SetLastError = true)]
+        public static extern bool DeleteObject(IntPtr hObject);
+
         // --- Shell notification icon (tray) ---
 
         [DllImport("shell32.dll", CharSet = CharSet.Auto)]

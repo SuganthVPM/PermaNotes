@@ -1,5 +1,16 @@
+$ErrorActionPreference = "Stop"
+
+# Ensure local dotnet is found if not in default PATH
+if (Test-Path "$env:LOCALAPPDATA\Microsoft\dotnet") {
+    $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
+}
+
+# Stop any running instances to unlock binaries
+Get-Process | Where-Object { $_.ProcessName -like "*PermaNotes*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
+
 # 1. Build and Publish the standalone executable
-Write-Host "Publishing PermaNotes standalone executable..." -ForegroundColor Cyan
+Write-Host "Publishing PermaNotes standalone portable executable..." -ForegroundColor Cyan
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./dist
 
 if ($LASTEXITCODE -ne 0) {
@@ -7,9 +18,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Rename the published executable to include version
-if (Test-Path "./dist/PermaNotes_v1.4.2.exe") { Remove-Item "./dist/PermaNotes_v1.4.2.exe" -Force }
-Rename-Item -Path "./dist/PermaNotes.exe" -NewName "PermaNotes_v1.4.2.exe"
+# Copy the published executable with versioned name for portable release
+Copy-Item "./dist/PermaNotes.exe" -Destination "./dist/PermaNotes_v1.4.2.exe" -Force
 
 # 2. Package the installer using Inno Setup
 Write-Host "Packaging installer with Inno Setup..." -ForegroundColor Cyan

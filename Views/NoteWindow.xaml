@@ -207,6 +207,19 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
 
+        <Style x:Key="ResizeThumbStyle" TargetType="Thumb">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="Transparent"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="FormatToolbarButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#EEEEEE"/>
@@ -273,16 +286,20 @@
                     <TextBlock x:Name="TitleBlock" Grid.Column="0" 
                                Margin="12,0,0,0" 
                                VerticalAlignment="Center" 
+                               HorizontalAlignment="Left"
                                FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI"
                                FontWeight="SemiBold" 
                                FontSize="14" 
                                Foreground="#444444"
                                TextTrimming="CharacterEllipsis"
+                               ForceCursor="True"
                                MouseLeftButtonDown="TitleBlock_MouseLeftButtonDown"/>
 
                     <TextBox x:Name="TitleEditBox" Grid.Column="0" 
                              Margin="10,2,4,2" 
                              VerticalAlignment="Center" 
+                             HorizontalAlignment="Left"
+                             MinWidth="120"
                              FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI"
                              FontWeight="SemiBold" 
                              FontSize="14" 
@@ -290,6 +307,7 @@
                              Background="#30FFFFFF" 
                              BorderThickness="0"
                              Padding="4,2"
+                             ForceCursor="True"
                              Visibility="Collapsed"
                              LostFocus="TitleEditBox_LostFocus"
                              KeyDown="TitleEditBox_KeyDown"/>
@@ -353,7 +371,8 @@
                              FontSize="15" 
                              Foreground="#333333" 
                              FontFamily="Inter, Roboto, Segoe UI Variable, Segoe UI"
-                             Cursor="Arrow"
+                             PreviewMouseMove="ContentRichTextBox_PreviewMouseMove"
+                             MouseLeave="ContentRichTextBox_MouseLeave"
                              PreviewMouseWheel="ContentRichTextBox_PreviewMouseWheel"
                              PreviewMouseUp="ContentRichTextBox_PreviewMouseUp"
                              PreviewMouseLeftButtonDown="ContentRichTextBox_PreviewMouseLeftButtonDown"
@@ -364,16 +383,28 @@
                              ContextMenu="{DynamicResource NoteContextMenu}">
                 </RichTextBox>
 
-                <!-- Custom Resize Grip to prevent DWM crashes -->
-                <Thumb Grid.Row="1" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Background="Transparent" DragDelta="ResizeGrip_DragDelta">
-                    <Thumb.Template>
-                        <ControlTemplate>
-                            <Border Background="Transparent"/>
-                        </ControlTemplate>
-                    </Thumb.Template>
-                </Thumb>
+                <!-- Subtle corner grip decoration -->
+                <Canvas Grid.Row="1" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,5,5" IsHitTestVisible="False" Opacity="0.3">
+                    <Line X1="8" Y1="2" X2="2" Y2="8" Stroke="{Binding Foreground, ElementName=ContentRichTextBox}" StrokeThickness="1.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    <Line X1="8" Y1="5" X2="5" Y2="8" Stroke="{Binding Foreground, ElementName=ContentRichTextBox}" StrokeThickness="1.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                </Canvas>
             </Grid>
         </Border>
+
+        <!-- Perimeter Resize Thumbs (8 directions) -->
+        <Grid x:Name="ResizeGrid" Margin="0">
+            <!-- 4 Corners -->
+            <Thumb Tag="TopLeft" Cursor="SizeNWSE" HorizontalAlignment="Left" VerticalAlignment="Top" Width="16" Height="16" Margin="-4,-4,0,0" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="TopRight" Cursor="SizeNESW" HorizontalAlignment="Right" VerticalAlignment="Top" Width="16" Height="16" Margin="0,-4,-4,0" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="BottomLeft" Cursor="SizeNESW" HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="16" Height="16" Margin="-4,0,0,-4" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="BottomRight" Cursor="SizeNWSE" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="18" Height="18" Margin="0,0,-4,-4" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+
+            <!-- 4 Edges -->
+            <Thumb Tag="Top" Cursor="SizeNS" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="8" Margin="12,-4,12,0" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="Bottom" Cursor="SizeNS" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Height="8" Margin="12,0,12,-4" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="Left" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Stretch" Width="8" Margin="-4,12,0,12" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="Right" Cursor="SizeWE" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="8" Margin="0,12,-4,12" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+        </Grid>
 
         <!-- Formatting Popup -->
         <Popup x:Name="FormatPopup" AllowsTransparency="True" StaysOpen="False" Placement="MousePoint" HorizontalOffset="-30" VerticalOffset="-40">
