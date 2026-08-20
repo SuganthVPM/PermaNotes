@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Copy the published executable with versioned name for portable release
-Copy-Item "./dist/PermaNotes.exe" -Destination "./dist/PermaNotes_v1.4.2.exe" -Force
+Copy-Item "./dist/PermaNotes.exe" -Destination "./dist/PermaNotes_v1.5.0.exe" -Force
 
 # 2. Package the installer using Inno Setup
 Write-Host "Packaging installer with Inno Setup..." -ForegroundColor Cyan
