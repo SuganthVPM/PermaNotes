@@ -97,9 +97,6 @@ namespace DesktopNotes
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Force software rendering to lower GPU/Memory overhead
-            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
-
             base.OnStartup(e);
 
             // --- Single-instance enforcement ---
@@ -141,10 +138,16 @@ namespace DesktopNotes
                 LoadNotes();
 
                 // --- Memory Trimming ---
-                _memoryTimer = new System.Timers.Timer(60000); // Trim every 1 minute
+                _memoryTimer = new System.Timers.Timer(30000); // Trim every 30 seconds
                 _memoryTimer.Elapsed += (s, e) => TrimMemory();
                 _memoryTimer.Start();
-                TrimMemory(); // Trim immediately on startup
+
+                // Post-startup trim after all WPF windows finish loading and rendering
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(1500);
+                    TrimMemory();
+                }));
 
                 Trace($"Active windows: {_activeNoteWindows.Count}");
             }
@@ -717,6 +720,10 @@ namespace DesktopNotes
 
         // ===================== MEMORY MANAGEMENT =====================
 
+        [DllImport("psapi.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EmptyWorkingSet(IntPtr hProcess);
+
         [DllImport("kernel32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetProcessWorkingSetSize(IntPtr process, UIntPtr minimumWorkingSetSize, UIntPtr maximumWorkingSetSize);
@@ -725,10 +732,15 @@ namespace DesktopNotes
         {
             try
             {
-                GC.Collect();
+                // Force full generation 2 collection and compact LOH / SOH heaps
+                GC.Collect(2, GCCollectionMode.Aggressive, true, true);
                 GC.WaitForPendingFinalizers();
-                GC.Collect();
-                SetProcessWorkingSetSize(System.Diagnostics.Process.GetCurrentProcess().Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
+                GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+
+                // Flush unused memory-mapped bundle pages and working set
+                var handle = System.Diagnostics.Process.GetCurrentProcess().Handle;
+                EmptyWorkingSet(handle);
+                SetProcessWorkingSetSize(handle, unchecked((UIntPtr)(ulong)-1), unchecked((UIntPtr)(ulong)-1));
             }
             catch { }
         }

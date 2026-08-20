@@ -71,6 +71,7 @@ namespace DesktopNotes.Views
         /// restoring RTF content doesn't immediately trigger a save.
         /// </summary>
         private bool _isInitializing = true;
+        private bool _isResizing = false;
 
         /// <summary>
         /// Maps each preset note background hex colour to a darker border colour
@@ -234,7 +235,7 @@ namespace DesktopNotes.Views
                 TitleEditBox.CaretBrush = textColor;
                 ContentRichTextBox.Foreground = textColor;
                 ContentRichTextBox.CaretBrush = textColor;
-                ContentRichTextBox.Cursor = GetHighContrastIBeamCursor();
+                ContentRichTextBox.Cursor = null; // Let QueryCursor dynamically determine cursor per element
                 
                 UpdateTextContrast(textColor);
 
@@ -261,7 +262,7 @@ namespace DesktopNotes.Views
                 TitleEditBox.CaretBrush = TitleBlock.Foreground;
                 ContentRichTextBox.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x22, 0x22));
                 ContentRichTextBox.CaretBrush = ContentRichTextBox.Foreground;
-                ContentRichTextBox.Cursor = GetHighContrastIBeamCursor();
+                ContentRichTextBox.Cursor = null;
                 
                 UpdateTextContrast((SolidColorBrush)ContentRichTextBox.Foreground);
                 
@@ -343,7 +344,7 @@ namespace DesktopNotes.Views
         protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
         {
             base.OnRenderSizeChanged(sizeInfo);
-            if (!_isInitializing)
+            if (!_isInitializing && !_isResizing)
             {
                 UpdatePositionAndSize();
             }
@@ -664,6 +665,43 @@ namespace DesktopNotes.Views
             }
         }
 
+        private static bool IsOverScrollBar(DependencyObject? originalSource, System.Windows.Point pos, System.Windows.Controls.RichTextBox rtb)
+        {
+            if (originalSource != null)
+            {
+                DependencyObject? current = originalSource;
+                while (current != null && current != rtb)
+                {
+                    if (current is System.Windows.Controls.Primitives.ScrollBar ||
+                        current is System.Windows.Controls.Primitives.Thumb ||
+                        current is System.Windows.Controls.Primitives.RepeatButton)
+                    {
+                        return true;
+                    }
+                    if (current is Visual || current is System.Windows.Media.Media3D.Visual3D)
+                    {
+                        current = VisualTreeHelper.GetParent(current);
+                    }
+                    else
+                    {
+                        current = LogicalTreeHelper.GetParent(current);
+                    }
+                }
+            }
+
+            var scrollViewer = GetDescendantByType<ScrollViewer>(rtb);
+            if (scrollViewer != null && scrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible)
+            {
+                double scrollBarWidth = SystemParameters.VerticalScrollBarWidth + 6;
+                if (pos.X >= rtb.ActualWidth - scrollBarWidth)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void ContentRichTextBox_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
             if (NoteModel.IsLocked)
@@ -674,6 +712,13 @@ namespace DesktopNotes.Views
             }
 
             var pos = e.GetPosition(ContentRichTextBox);
+            if (IsOverScrollBar(e.OriginalSource as DependencyObject, pos, ContentRichTextBox))
+            {
+                if (System.Windows.Input.Mouse.OverrideCursor != null)
+                    System.Windows.Input.Mouse.OverrideCursor = null;
+                return;
+            }
+
             if (IsHoveringCheckbox(pos))
             {
                 System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Arrow;
@@ -702,6 +747,16 @@ namespace DesktopNotes.Views
             }
 
             var pos = System.Windows.Input.Mouse.GetPosition(ContentRichTextBox);
+
+            // If mouse is over the vertical ScrollBar, use standard Arrow cursor
+            if (IsOverScrollBar(e.OriginalSource as DependencyObject, pos, ContentRichTextBox))
+            {
+                e.Cursor = System.Windows.Input.Cursors.Arrow;
+                e.Handled = true;
+                return;
+            }
+
+            // If mouse is over a checkbox glyph, use Arrow cursor
             if (IsHoveringCheckbox(pos))
             {
                 e.Cursor = System.Windows.Input.Cursors.Arrow;
@@ -709,6 +764,7 @@ namespace DesktopNotes.Views
                 return;
             }
 
+            // In editable text area, use custom High-Contrast I-Beam
             e.Cursor = GetHighContrastIBeamCursor();
             e.Handled = true;
         }
@@ -1591,6 +1647,18 @@ namespace DesktopNotes.Views
             RequestSettings?.Invoke(this, EventArgs.Empty);
         }
 
+        private void ResizeThumb_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
+        {
+            if (NoteModel.IsLocked) return;
+            _isResizing = true;
+        }
+
+        private void ResizeThumb_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            _isResizing = false;
+            UpdatePositionAndSize();
+        }
+
         private void ResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
         {
             if (NoteModel.IsLocked) return;
@@ -1599,61 +1667,64 @@ namespace DesktopNotes.Views
             double minW = MinWidth > 0 ? MinWidth : 200;
             double minH = MinHeight > 0 ? MinHeight : 150;
 
-            // Right edge / corners
+            double curLeft = Left;
+            double curTop = Top;
+            double curWidth = Width;
+            double curHeight = Height;
+
+            // Horizontal resizing
             if (direction.Contains("Right"))
             {
-                double newWidth = Width + e.HorizontalChange;
-                if (newWidth >= minW)
+                double newW = curWidth + e.HorizontalChange;
+                if (newW >= minW)
                 {
-                    Width = newWidth;
+                    curWidth = newW;
                 }
             }
-
-            // Left edge / corners
-            if (direction.Contains("Left"))
+            else if (direction.Contains("Left"))
             {
-                double newWidth = Width - e.HorizontalChange;
-                if (newWidth >= minW)
+                double newW = curWidth - e.HorizontalChange;
+                if (newW >= minW)
                 {
-                    Width = newWidth;
-                    Left += e.HorizontalChange;
+                    curWidth = newW;
+                    curLeft += e.HorizontalChange;
                 }
                 else
                 {
-                    double diff = Width - minW;
-                    Left += diff;
-                    Width = minW;
+                    curLeft += (curWidth - minW);
+                    curWidth = minW;
                 }
             }
 
-            // Bottom edge / corners
+            // Vertical resizing
             if (direction.Contains("Bottom"))
             {
-                double newHeight = Height + e.VerticalChange;
-                if (newHeight >= minH)
+                double newH = curHeight + e.VerticalChange;
+                if (newH >= minH)
                 {
-                    Height = newHeight;
+                    curHeight = newH;
                 }
             }
-
-            // Top edge / corners
-            if (direction.Contains("Top"))
+            else if (direction.Contains("Top"))
             {
-                double newHeight = Height - e.VerticalChange;
-                if (newHeight >= minH)
+                double newH = curHeight - e.VerticalChange;
+                if (newH >= minH)
                 {
-                    Height = newHeight;
-                    Top += e.VerticalChange;
+                    curHeight = newH;
+                    curTop += e.VerticalChange;
                 }
                 else
                 {
-                    double diff = Height - minH;
-                    Top += diff;
-                    Height = minH;
+                    curTop += (curHeight - minH);
+                    curHeight = minH;
                 }
             }
 
-            UpdatePositionAndSize();
+            // Apply calculated bounds in a single batch
+            if (curLeft != Left) Left = curLeft;
+            if (curTop != Top) Top = curTop;
+            if (curWidth != Width) Width = curWidth;
+            if (curHeight != Height) Height = curHeight;
         }
 
         private static System.Windows.Input.Cursor? _highContrastIBeamCursor;

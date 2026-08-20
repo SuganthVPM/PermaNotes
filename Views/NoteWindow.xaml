@@ -394,16 +394,16 @@
         <!-- Perimeter Resize Thumbs (8 directions) -->
         <Grid x:Name="ResizeGrid" Margin="0">
             <!-- 4 Corners -->
-            <Thumb Tag="TopLeft" Cursor="SizeNWSE" HorizontalAlignment="Left" VerticalAlignment="Top" Width="16" Height="16" Margin="-4,-4,0,0" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
-            <Thumb Tag="TopRight" Cursor="SizeNESW" HorizontalAlignment="Right" VerticalAlignment="Top" Width="16" Height="16" Margin="0,-4,-4,0" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
-            <Thumb Tag="BottomLeft" Cursor="SizeNESW" HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="16" Height="16" Margin="-4,0,0,-4" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
-            <Thumb Tag="BottomRight" Cursor="SizeNWSE" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="18" Height="18" Margin="0,0,-4,-4" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="TopLeft" Cursor="SizeNWSE" HorizontalAlignment="Left" VerticalAlignment="Top" Width="16" Height="16" Margin="-4,-4,0,0" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+            <Thumb Tag="TopRight" Cursor="SizeNESW" HorizontalAlignment="Right" VerticalAlignment="Top" Width="16" Height="16" Margin="0,-4,-4,0" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+            <Thumb Tag="BottomLeft" Cursor="SizeNESW" HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="16" Height="16" Margin="-4,0,0,-4" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+            <Thumb Tag="BottomRight" Cursor="SizeNWSE" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="18" Height="18" Margin="0,0,-4,-4" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
 
             <!-- 4 Edges -->
-            <Thumb Tag="Top" Cursor="SizeNS" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="8" Margin="12,-4,12,0" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
-            <Thumb Tag="Bottom" Cursor="SizeNS" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Height="8" Margin="12,0,12,-4" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
-            <Thumb Tag="Left" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Stretch" Width="8" Margin="-4,12,0,12" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
-            <Thumb Tag="Right" Cursor="SizeWE" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="8" Margin="0,12,-4,12" Style="{StaticResource ResizeThumbStyle}" DragDelta="ResizeThumb_DragDelta"/>
+            <Thumb Tag="Top" Cursor="SizeNS" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="8" Margin="12,-4,12,0" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+            <Thumb Tag="Bottom" Cursor="SizeNS" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Height="8" Margin="12,0,12,-4" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+            <Thumb Tag="Left" Cursor="SizeWE" HorizontalAlignment="Left" VerticalAlignment="Stretch" Width="8" Margin="-4,12,0,12" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
+            <Thumb Tag="Right" Cursor="SizeWE" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="8" Margin="0,12,-4,12" Style="{StaticResource ResizeThumbStyle}" DragStarted="ResizeThumb_DragStarted" DragDelta="ResizeThumb_DragDelta" DragCompleted="ResizeThumb_DragCompleted"/>
         </Grid>
 
         <!-- Formatting Popup -->
