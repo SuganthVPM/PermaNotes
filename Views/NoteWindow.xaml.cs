@@ -499,11 +499,21 @@ namespace DesktopNotes.Views
         /// </summary>
         private void InsertTimestamp_Click(object sender, RoutedEventArgs e)
         {
+            if (NoteModel.IsLocked) return;
+
             var timeString = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-            ContentRichTextBox.CaretPosition.InsertTextInRun(timeString + " ");
-            ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(timeString.Length + 1) ?? ContentRichTextBox.CaretPosition;
+            if (!ContentRichTextBox.Selection.IsEmpty)
+            {
+                ContentRichTextBox.Selection.Text = timeString + " ";
+                ContentRichTextBox.CaretPosition = ContentRichTextBox.Selection.End;
+            }
+            else
+            {
+                ContentRichTextBox.CaretPosition.InsertTextInRun(timeString + " ");
+                ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(timeString.Length + 1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+            }
             ContentRichTextBox.Focus();
-            ContentRichTextBox_TextChanged(this, null!);
+            TriggerNoteSave();
         }
 
         /// <summary>
@@ -896,6 +906,26 @@ namespace DesktopNotes.Views
         {
             if (NoteModel.IsLocked) return;
 
+            // Handle Backspace immediately after checkbox
+            if (e.Key == Key.Back && ContentRichTextBox.Selection.IsEmpty)
+            {
+                var caret = ContentRichTextBox.CaretPosition;
+                var currentParagraph = caret.Paragraph;
+                if (currentParagraph != null)
+                {
+                    var textBeforeRange = new TextRange(currentParagraph.ContentStart, caret);
+                    string textBefore = textBeforeRange.Text;
+                    if (textBefore == "☐ " || textBefore == "☑ " || textBefore == "☐" || textBefore == "☑")
+                    {
+                        textBeforeRange.Text = "";
+                        ContentRichTextBox.CaretPosition = currentParagraph.ContentStart;
+                        e.Handled = true;
+                        TriggerNoteSave();
+                        return;
+                    }
+                }
+            }
+
             if (e.Key == Key.Enter)
             {
                 var caret = ContentRichTextBox.CaretPosition;
@@ -920,6 +950,35 @@ namespace DesktopNotes.Views
                     }
                 }
 
+                // Check if we are in a checkbox line
+                bool wasCheckboxLine = false;
+                if (currentParagraph != null)
+                {
+                    var lineRange = new TextRange(currentParagraph.ContentStart, currentParagraph.ContentEnd);
+                    string lineText = lineRange.Text.TrimEnd('\r', '\n');
+
+                    if (lineText.StartsWith("☐") || lineText.StartsWith("☑"))
+                    {
+                        string remainder = lineText.Substring(1).Trim();
+                        // If current checkbox line is empty, pressing Enter clears the checkbox and exits checklist mode
+                        if (string.IsNullOrEmpty(remainder))
+                        {
+                            lineRange.Text = "";
+                            ContentRichTextBox.CaretPosition = currentParagraph.ContentStart;
+                            e.Handled = true;
+                            TriggerNoteSave();
+                            return;
+                        }
+
+                        // Only continue the checklist if the caret is after the checkbox prefix
+                        var textBeforeCaret = new TextRange(currentParagraph.ContentStart, caret).Text;
+                        if (textBeforeCaret.StartsWith("☐") || textBeforeCaret.StartsWith("☑"))
+                        {
+                            wasCheckboxLine = true;
+                        }
+                    }
+                }
+
                 bool processed = ProcessMarkdownAtCaret(Key.Enter, out bool skipEnterBreak);
 
                 e.Handled = true;
@@ -934,11 +993,11 @@ namespace DesktopNotes.Views
                 EditingCommands.EnterParagraphBreak.Execute(null, ContentRichTextBox);
                 
                 // Clear paragraph-level formatting (like large Fonts from Headers)
-                if (caret.Paragraph != null)
+                if (ContentRichTextBox.CaretPosition.Paragraph != null)
                 {
-                    caret.Paragraph.ClearValue(TextElement.FontSizeProperty);
-                    caret.Paragraph.ClearValue(TextElement.FontWeightProperty);
-                    caret.Paragraph.ClearValue(TextElement.FontStyleProperty);
+                    ContentRichTextBox.CaretPosition.Paragraph.ClearValue(TextElement.FontSizeProperty);
+                    ContentRichTextBox.CaretPosition.Paragraph.ClearValue(TextElement.FontWeightProperty);
+                    ContentRichTextBox.CaretPosition.Paragraph.ClearValue(TextElement.FontStyleProperty);
                 }
 
                 // Reset inline typing state (so bold, italic, strikethrough don't bleed)
@@ -946,6 +1005,13 @@ namespace DesktopNotes.Views
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
                 ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.BackgroundProperty, System.Windows.Media.Brushes.Transparent);
+
+                // If continuing a checklist item, insert a new unchecked checkbox on the new line
+                if (wasCheckboxLine)
+                {
+                    ContentRichTextBox.CaretPosition.InsertTextInRun("☐ ");
+                    ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(2, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+                }
                 
                 return;
             }
@@ -988,7 +1054,7 @@ namespace DesktopNotes.Views
             }
 
             // 2. Checkboxes
-            if (textBeforeCaret == "[]")
+            if (textBeforeCaret == "[]" || textBeforeCaret == "[ ]")
             {
                 textRangeBeforeCaret.Text = "☐ ";
                 ContentRichTextBox.CaretPosition = textRangeBeforeCaret.End;
@@ -1282,7 +1348,7 @@ namespace DesktopNotes.Views
         ///   <item><term>Ctrl+N</term><description>Create a new note</description></item>
         /// </list>
         /// </summary>
-        private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
             if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
             {

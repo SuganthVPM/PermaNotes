@@ -16,7 +16,7 @@
         TextOptions.TextRenderingMode="ClearType"
         Loaded="Window_Loaded"
         StateChanged="Window_StateChanged"
-        KeyDown="Window_KeyDown"
+        PreviewKeyDown="Window_PreviewKeyDown"
         ContextMenu="{DynamicResource NoteContextMenu}">
 
     <Window.Resources>
