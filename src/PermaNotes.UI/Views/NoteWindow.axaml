@@ -1,0 +1,316 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PermaNotes.UI.ViewModels"
+        xmlns:avrtb="using:AvRichTextBox"
+        x:Class="PermaNotes.UI.Views.NoteWindow"
+        x:DataType="vm:NoteViewModel"
+        Title="{Binding Title}"
+        Width="{Binding Width, Mode=TwoWay}"
+        Height="{Binding Height, Mode=TwoWay}"
+        MinWidth="200" MinHeight="150"
+        SystemDecorations="None"
+        TransparencyLevelHint="AcrylicBlur, Blur, Transparent"
+        Background="Transparent"
+        Topmost="{Binding IsAlwaysOnTop}"
+        ShowInTaskbar="False"
+        Icon="avares://PermaNotes.UI/Assets/icon.ico">
+
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="Cut" Click="Cut_Click" InputGesture="Ctrl+X"/>
+            <MenuItem Header="Copy" Click="Copy_Click" InputGesture="Ctrl+C"/>
+            <MenuItem Header="Paste" Click="Paste_Click" InputGesture="Ctrl+V"/>
+            <Separator/>
+            <MenuItem Header="Format">
+                <MenuItem Header="Bold" Click="Bold_Click" InputGesture="Ctrl+B"/>
+                <MenuItem Header="Italic" Click="Italic_Click" InputGesture="Ctrl+I"/>
+                <MenuItem Header="Underline" Click="Underline_Click" InputGesture="Ctrl+U"/>
+                <MenuItem Header="Strikethrough" Click="Strikethrough_Click" InputGesture="Ctrl+Shift+X"/>
+                <Separator/>
+                <MenuItem Header="Font Size">
+                    <MenuItem Header="10" Tag="10" Click="FontSize_Click"/>
+                    <MenuItem Header="12" Tag="12" Click="FontSize_Click"/>
+                    <MenuItem Header="14" Tag="14" Click="FontSize_Click"/>
+                    <MenuItem Header="16" Tag="16" Click="FontSize_Click"/>
+                    <MenuItem Header="18" Tag="18" Click="FontSize_Click"/>
+                    <MenuItem Header="20" Tag="20" Click="FontSize_Click"/>
+                    <MenuItem Header="24" Tag="24" Click="FontSize_Click"/>
+                    <MenuItem Header="28" Tag="28" Click="FontSize_Click"/>
+                    <MenuItem Header="32" Tag="32" Click="FontSize_Click"/>
+                </MenuItem>
+            </MenuItem>
+            <MenuItem Header="Insert">
+                <MenuItem Header="Timestamp" Click="Timestamp_Click" InputGesture="Ctrl+T"/>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="New Note" Click="NewNote_Click" InputGesture="Ctrl+N"/>
+            <MenuItem Header="Duplicate Note" Click="DuplicateNote_Click"/>
+            <MenuItem Header="Note Manager" Click="OpenNoteManager_Click"/>
+            <Separator/>
+            <MenuItem Header="Color">
+                <!-- Native Apple Glassmorphism Toggle -->
+                <MenuItem Header="Glassmorphism (Apple Glass)" Command="{Binding ToggleGlassmorphismCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding IsGlassmorphic}" IsHitTestVisible="False"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Apple Glass (Frosted)" Command="{Binding SetGlassCommand}">
+                    <MenuItem.Icon>
+                        <Border Width="14" Height="14" CornerRadius="3" Background="#35FFFFFF" BorderBrush="#99FFFFFF" BorderThickness="1"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="Yellow" Command="{Binding SetColorCommand}" CommandParameter="#FFF9C4">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#FFF9C4" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Orange" Command="{Binding SetColorCommand}" CommandParameter="#FFE0B2">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#FFE0B2" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Green" Command="{Binding SetColorCommand}" CommandParameter="#A5D6A7">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#A5D6A7" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Teal" Command="{Binding SetColorCommand}" CommandParameter="#80CBC4">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#80CBC4" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Blue" Command="{Binding SetColorCommand}" CommandParameter="#90CAF9">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#90CAF9" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Purple" Command="{Binding SetColorCommand}" CommandParameter="#CE93D8">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#CE93D8" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Pink" Command="{Binding SetColorCommand}" CommandParameter="#F48FB1">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#F48FB1" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="White" Command="{Binding SetColorCommand}" CommandParameter="#FAFAFA">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#FAFAFA" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Gray" Command="{Binding SetColorCommand}" CommandParameter="#E0E0E0">
+                    <MenuItem.Icon><Border Width="14" Height="14" CornerRadius="2" Background="#E0E0E0" BorderBrush="#80000000" BorderThickness="0.5"/></MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="Custom Color..." Click="CustomColor_Click"/>
+            </MenuItem>
+            <MenuItem Header="Opacity">
+                <MenuItem Header="100%" Command="{Binding SetOpacityCommand}" CommandParameter="1.0"/>
+                <MenuItem Header="90%" Command="{Binding SetOpacityCommand}" CommandParameter="0.9"/>
+                <MenuItem Header="80%" Command="{Binding SetOpacityCommand}" CommandParameter="0.8"/>
+                <MenuItem Header="70%" Command="{Binding SetOpacityCommand}" CommandParameter="0.7"/>
+                <MenuItem Header="60%" Command="{Binding SetOpacityCommand}" CommandParameter="0.6"/>
+                <MenuItem Header="50%" Command="{Binding SetOpacityCommand}" CommandParameter="0.5"/>
+                <MenuItem Header="40%" Command="{Binding SetOpacityCommand}" CommandParameter="0.4"/>
+                <MenuItem Header="30%" Command="{Binding SetOpacityCommand}" CommandParameter="0.3"/>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="Always on Top" Command="{Binding ToggleAlwaysOnTopCommand}">
+                <MenuItem.Icon>
+                    <CheckBox IsChecked="{Binding IsAlwaysOnTop}" IsHitTestVisible="False"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Click-Through" Command="{Binding ToggleClickThroughCommand}">
+                <MenuItem.Icon>
+                    <CheckBox IsChecked="{Binding IsClickThrough}" IsHitTestVisible="False"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Lock Note" Command="{Binding ToggleLockCommand}">
+                <MenuItem.Icon>
+                    <CheckBox IsChecked="{Binding IsLocked}" IsHitTestVisible="False"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="Delete Note" Click="DeleteNote_Click"/>
+            <MenuItem Header="Close" Click="CloseNote_Click"/>
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Grid Margin="10">
+        <!-- Main Note Card with CornerRadius 14 and Drop Shadow matching WPF -->
+        <Border Name="CardBorder"
+                CornerRadius="14"
+                Background="{Binding CardBackground}"
+                BorderBrush="{Binding CardBorderBrush}"
+                BorderThickness="{Binding BorderThickness}"
+                BoxShadow="0 4 15 0 #28000000">
+
+            <DockPanel LastChildFill="True">
+                <!-- Header / Drag Bar (36px) -->
+                <DockPanel Name="HeaderPanel"
+                           DockPanel.Dock="Top"
+                           Height="36"
+                           Background="Transparent"
+                           PointerPressed="Header_PointerPressed">
+
+                    <!-- Right Controls: SavedIndicator, Click-Through, Lock, New, Note Manager, Delete, Close -->
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                Spacing="2"
+                                Margin="0,0,6,0"
+                                VerticalAlignment="Center">
+
+                        <!-- Saved Indicator (matching WPF) -->
+                        <TextBlock Name="SavedIndicator"
+                                   Text="Saved"
+                                   VerticalAlignment="Center"
+                                   FontSize="11"
+                                   Foreground="{Binding HeaderColor}"
+                                   Opacity="0"
+                                   Margin="0,0,6,0"/>
+
+                        <!-- Click-Through Toggle -->
+                        <Button Classes="HeaderIconBtn"
+                                Command="{Binding ToggleClickThroughCommand}"
+                                ToolTip.Tip="Enable Click-Through">
+                            <Path Data="M21,3H7C5.89,3,5,3.89,5,5v4H3v12c0,1.1,0.89,2,2,2h12v-2H5V11h14v2h2V5C21,3.89,20.1,3,21,3z M19,9H7V5h12V9z M14,14v8l2.25-2.25l2.5,4.25l1.5-0.75l-2.5-4.25l3.5,0L14,14z"
+                                  Fill="{Binding IconColor}"
+                                  Width="14" Height="14"
+                                  Stretch="Uniform"/>
+                        </Button>
+
+                        <!-- Lock Toggle -->
+                        <Button Classes="HeaderIconBtn"
+                                Command="{Binding ToggleLockCommand}"
+                                ToolTip.Tip="Lock Note">
+                            <Path Data="M 19 9 L 5 9 C 3.9 9 3 9.9 3 11 L 3 20 C 3 21.1 3.9 22 5 22 L 19 22 C 20.1 22 21 21.1 21 20 L 21 11 C 21 9.9 20.1 9 19 9 Z M 10 9 L 10 6 C 10 2.7 7.3 0 4 0 C 0.7 0 -2 2.7 -2 6 L -2 15 C -2 16.1 -0.9 17 0 17 C 0.9 17 2 16.1 2 15 L 2 6 C 2 4.9 2.9 4 4 4 C 5.1 4 6 4.9 6 6 L 6 9 Z M 12 17 A 1.5 1.5 0 0 0 12.75 14.33 L 12.75 12 A 0.75 0.75 0 0 0 11.25 12 L 11.25 14.33 A 1.5 1.5 0 0 0 12 17 Z"
+                                  Fill="{Binding IconColor}"
+                                  Width="13" Height="14"
+                                  Stretch="Uniform"/>
+                        </Button>
+
+                        <!-- New Note (+) -->
+                        <Button Classes="HeaderIconBtn"
+                                Click="NewNote_Click"
+                                ToolTip.Tip="New Note (Ctrl+N)">
+                            <Path Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H10v-2H6V4h7v5h5v3h2V8l-6-6zM18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3h-2z"
+                                  Fill="{Binding IconColor}"
+                                  Width="14" Height="14"
+                                  Stretch="Uniform"/>
+                        </Button>
+
+                        <!-- Note Manager -->
+                        <Button Classes="HeaderIconBtn"
+                                Click="OpenNoteManager_Click"
+                                ToolTip.Tip="Search Notes / Note Manager">
+                            <Path Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H11v-2H6V4h7v5h5v4h2V8l-6-6zM15.5 15c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5c.71 0 1.37-.23 1.9-.61l2.69 2.69 1.41-1.41-2.69-2.69c.38-.53.61-1.19.61-1.9 0-1.93-1.57-3.5-3.5-3.5zm0 5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
+                                  Fill="{Binding IconColor}"
+                                  Width="14" Height="14"
+                                  Stretch="Uniform"/>
+                        </Button>
+
+                        <!-- Delete Note -->
+                        <Button Classes="HeaderIconBtn"
+                                Click="DeleteNote_Click"
+                                ToolTip.Tip="Delete Note">
+                            <Path Data="M 9 3 L 9 4 L 4 4 L 4 6 L 5 6 L 5 20 C 5 21.104569 5.8954305 22 7 22 L 17 22 C 18.104569 22 19 21.104569 19 20 L 19 6 L 20 6 L 20 4 L 15 4 L 15 3 C 15 1.8954305 14.104569 1 13 1 L 11 1 C 9.8954305 1 9 1.8954305 9 3 z M 11 3 L 13 3 L 13 4 L 11 4 L 11 3 z M 7 6 L 17 6 L 17 20 L 7 20 L 7 6 z M 9 8 L 11 8 L 11 18 L 9 18 L 9 8 z M 13 8 L 15 8 L 15 18 L 13 18 L 13 8 z"
+                                  Fill="{Binding IconColor}"
+                                  Width="14" Height="14"
+                                  Stretch="Uniform"/>
+                        </Button>
+
+                        <!-- Close Note (X) -->
+                        <Button Classes="HeaderCloseBtn"
+                                Click="CloseNote_Click"
+                                Content="✕"
+                                ToolTip.Tip="Close Note"/>
+                    </StackPanel>
+
+                    <!-- Left: Title -->
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center">
+
+                        <!-- Title display (double click to edit) -->
+                        <TextBlock Text="{Binding Title}"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"
+                                   Foreground="{Binding HeaderColor}"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsEditingTitle}"
+                                   DoubleTapped="Title_DoubleTapped"
+                                   ToolTip.Tip="Double-click to rename"/>
+
+                        <!-- Title editor -->
+                        <TextBox Name="TitleEditBox"
+                                 Text="{Binding Title, Mode=TwoWay}"
+                                 FontSize="14"
+                                 Height="28"
+                                 Padding="4,2"
+                                 IsVisible="{Binding IsEditingTitle}"
+                                 LostFocus="TitleEdit_LostFocus"
+                                 KeyDown="TitleEdit_KeyDown"/>
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Locked Read-Only Notice (when locked) -->
+                <Border DockPanel.Dock="Top"
+                        IsVisible="{Binding IsLocked}"
+                        Background="#25000000"
+                        Padding="4,2"
+                        Margin="6,0,6,2"
+                        CornerRadius="4">
+                    <TextBlock Text="🔒 Locked (Read-Only)"
+                               FontSize="11"
+                               Foreground="{Binding HeaderColor}"
+                               HorizontalAlignment="Center"/>
+                </Border>
+
+                <!-- Rich Text Content Editor -->
+                <Grid Margin="8,0,8,8">
+                    <avrtb:RichTextBox Name="ContentRichTextBox"
+                                       Focusable="True"
+                                       Margin="2"/>
+
+                    <!-- Resize Grip Bottom-Right -->
+                    <Border Width="16" Height="16"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Background="Transparent"
+                            Cursor="BottomRightCorner"
+                            PointerPressed="ResizeGrip_PointerPressed">
+                        <Path Data="M 12,0 L 12,12 L 0,12 Z M 8,4 L 12,4 L 12,8 Z M 4,8 L 12,8 L 12,12 Z"
+                              Fill="{Binding IconColor}"
+                              Opacity="0.4"
+                              Width="8" Height="8"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Bottom"
+                              Margin="0,0,2,2"/>
+                    </Border>
+                </Grid>
+            </DockPanel>
+        </Border>
+    </Grid>
+
+    <Window.Styles>
+        <Style Selector="Button.HeaderIconBtn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.HeaderIconBtn:pointerover">
+            <Setter Property="Background" Value="#18000000"/>
+        </Style>
+
+        <Style Selector="Button.HeaderCloseBtn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{Binding HeaderColor}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.HeaderCloseBtn:pointerover">
+            <Setter Property="Background" Value="#25E53935"/>
+            <Setter Property="Foreground" Value="#E53935"/>
+        </Style>
+    </Window.Styles>
+</Window>
