@@ -9,7 +9,7 @@
         Height="{Binding Height, Mode=TwoWay}"
         MinWidth="200" MinHeight="150"
         SystemDecorations="None"
-        TransparencyLevelHint="AcrylicBlur, Blur, Transparent"
+        TransparencyLevelHint="Transparent"
         Background="Transparent"
         Topmost="{Binding IsAlwaysOnTop}"
         ShowInTaskbar="False"
@@ -256,6 +256,8 @@
                 <!-- Rich Text Content Editor -->
                 <Grid Margin="8,0,8,8">
                     <avrtb:RichTextBox Name="ContentRichTextBox"
+                                       Background="Transparent"
+                                       BorderThickness="0"
                                        Focusable="True"
                                        Margin="2"/>
 
