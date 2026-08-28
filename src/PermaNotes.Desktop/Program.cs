@@ -47,6 +47,7 @@ namespace PermaNotes.Desktop
             IVibrancyService?     vibrancy    = null)
             => AppBuilder.Configure(() => new App(clickThrough, desktopPin, startup, vibrancy))
                 .UsePlatformDetect()
+                .With(new SkiaOptions { MaxGpuResourceSizeBytes = 16 * 1024 * 1024 })
                 .WithInterFont()
                 .LogToTrace();
     }

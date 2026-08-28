@@ -225,11 +225,12 @@ namespace PermaNotes.UI
 
         private void ScheduleMemoryTrim()
         {
-            // Reclaim unneeded JIT and assembly-load pages 2.5 seconds after startup
+            // Reclaim unneeded JIT and assembly-load pages 3 seconds after startup,
+            // and periodically every 45s to flush working set when idle
             var timer = new System.Threading.Timer(_ =>
             {
                 TrimMemory();
-            }, null, 2500, System.Threading.Timeout.Infinite);
+            }, null, 3000, 45000);
         }
 
         private static void TrimMemory()
