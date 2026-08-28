@@ -146,6 +146,10 @@ namespace PermaNotes.UI.Views
             {
                 if (vm.IsClickThrough)
                 {
+                    // Force topmost visually during click-through so it floats over other apps
+                    _desktopPinService?.Detach(this);
+                    Topmost = true;
+
                     // Calculate absolute screen position of the ClickThroughBtn
                     _pinWindow = new PinWindow(() =>
                     {
@@ -176,6 +180,17 @@ namespace PermaNotes.UI.Views
                         _pinWindow = null;
                     }
                     _clickThroughService?.SetClickThrough(this, false, default);
+
+                    // Restore previous state: maintain Always-On-Top if it was enabled, or stick back to desktop if it was pinned
+                    Topmost = vm.IsAlwaysOnTop;
+                    if (vm.IsAlwaysOnTop)
+                    {
+                        _desktopPinService?.Detach(this);
+                    }
+                    else
+                    {
+                        _desktopPinService?.Attach(this);
+                    }
                 }
             }
             else if (e.PropertyName == nameof(NoteViewModel.IsLocked))

@@ -210,10 +210,6 @@ namespace PermaNotes.UI.ViewModels
         partial void OnIsClickThroughChanged(bool value)
         {
             Model.IsClickThrough = value;
-            if (value)
-            {
-                IsAlwaysOnTop = true;
-            }
             OnPropertyChanged(nameof(ClickThroughToolTip));
             OnPropertyChanged(nameof(ClickThroughBackground));
             NotifyChange();
