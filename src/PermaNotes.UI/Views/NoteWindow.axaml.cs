@@ -153,7 +153,7 @@ namespace PermaNotes.UI.Views
                     {
                         vm.IsClickThrough = false;
                         vm.NotifyChange();
-                    }, vm.IconColor);
+                    });
                     _pinWindow.Position = pt;
                     _pinWindow.Width = ClickThroughBtn.Bounds.Width > 0 ? ClickThroughBtn.Bounds.Width : 28;
                     _pinWindow.Height = ClickThroughBtn.Bounds.Height > 0 ? ClickThroughBtn.Bounds.Height : 28;
