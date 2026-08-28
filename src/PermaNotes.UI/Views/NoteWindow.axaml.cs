@@ -147,17 +147,24 @@ namespace PermaNotes.UI.Views
                 if (vm.IsClickThrough)
                 {
                     // Calculate absolute screen position of the ClickThroughBtn
-                    var pt = ClickThroughBtn.PointToScreen(new Avalonia.Point(0, 0));
-                    
                     _pinWindow = new PinWindow(() =>
                     {
                         vm.IsClickThrough = false;
                         vm.NotifyChange();
                     });
-                    _pinWindow.Position = pt;
                     _pinWindow.Width = ClickThroughBtn.Bounds.Width > 0 ? ClickThroughBtn.Bounds.Width : 28;
                     _pinWindow.Height = ClickThroughBtn.Bounds.Height > 0 ? ClickThroughBtn.Bounds.Height : 28;
-                    _pinWindow.Show();
+                    _pinWindow.Show(this);
+
+                    var rel = ClickThroughBtn.TranslatePoint(new Avalonia.Point(0, 0), this);
+                    if (rel.HasValue)
+                    {
+                        _pinWindow.Position = this.PointToScreen(rel.Value);
+                    }
+                    else
+                    {
+                        _pinWindow.Position = ClickThroughBtn.PointToScreen(new Avalonia.Point(0, 0));
+                    }
                     
                     _clickThroughService?.SetClickThrough(this, true, default);
                 }

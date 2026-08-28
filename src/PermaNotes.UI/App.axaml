@@ -5,5 +5,115 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
+
+        <!-- Sleek ScrollBar Style matching original WPF DesktopNotes -->
+        <Style Selector="ScrollBar:vertical">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="MinWidth" Value="14"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid Background="Transparent">
+                        <Track Name="PART_Track"
+                               IsDirectionReversed="True"
+                               Orientation="Vertical"
+                               Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}"
+                               ViewportSize="{TemplateBinding ViewportSize}">
+                            <Track.Thumb>
+                                <Thumb Classes="SleekThumbV"/>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <Style Selector="Thumb.SleekThumbV">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="ThumbBorder"
+                            HorizontalAlignment="Right"
+                            Margin="0,0,2,0"
+                            Width="4"
+                            Background="#40000000"
+                            CornerRadius="2">
+                        <Border.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Width" Duration="0:0:0.15"/>
+                                <BrushTransition Property="Background" Duration="0:0:0.15"/>
+                                <CornerRadiusTransition Property="CornerRadius" Duration="0:0:0.15"/>
+                            </Transitions>
+                        </Border.Transitions>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Thumb.SleekThumbV:pointerover /template/ Border#ThumbBorder">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Background" Value="#60000000"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+        <Style Selector="Thumb.SleekThumbV:pressed /template/ Border#ThumbBorder">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Background" Value="#90000000"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+
+        <Style Selector="ScrollBar:horizontal">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="MinHeight" Value="14"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid Background="Transparent">
+                        <Track Name="PART_Track"
+                               Orientation="Horizontal"
+                               Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}"
+                               ViewportSize="{TemplateBinding ViewportSize}">
+                            <Track.Thumb>
+                                <Thumb Classes="SleekThumbH"/>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <Style Selector="Thumb.SleekThumbH">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="ThumbBorderH"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,0,2"
+                            Height="4"
+                            Background="#40000000"
+                            CornerRadius="2">
+                        <Border.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Height" Duration="0:0:0.15"/>
+                                <BrushTransition Property="Background" Duration="0:0:0.15"/>
+                                <CornerRadiusTransition Property="CornerRadius" Duration="0:0:0.15"/>
+                            </Transitions>
+                        </Border.Transitions>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Thumb.SleekThumbH:pointerover /template/ Border#ThumbBorderH">
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="Background" Value="#60000000"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+        <Style Selector="Thumb.SleekThumbH:pressed /template/ Border#ThumbBorderH">
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="Background" Value="#90000000"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
     </Application.Styles>
 </Application>
