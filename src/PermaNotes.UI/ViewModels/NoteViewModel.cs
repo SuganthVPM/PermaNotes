@@ -214,8 +214,15 @@ namespace PermaNotes.UI.ViewModels
             {
                 IsAlwaysOnTop = true;
             }
+            OnPropertyChanged(nameof(ClickThroughToolTip));
+            OnPropertyChanged(nameof(ClickThroughBackground));
             NotifyChange();
         }
+
+        public string ClickThroughToolTip => IsClickThrough ? "Disable Click-Through" : "Enable Click-Through";
+        public IBrush ClickThroughBackground => IsClickThrough 
+            ? new SolidColorBrush(Color.Parse("#402196F3")) 
+            : Brushes.Transparent;
 
         public string LockToolTip => IsLocked ? "Unlock Note" : "Lock Note";
 
