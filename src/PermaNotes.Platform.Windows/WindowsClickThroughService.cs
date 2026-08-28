@@ -98,7 +98,7 @@ namespace PermaNotes.Platform.Windows
         {
             // Add WS_EX_LAYERED | WS_EX_TRANSPARENT style so the OS knows the window can be transparent
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
 
             if (_states.ContainsKey(hwnd)) return; // already sub-classed
 
@@ -112,15 +112,13 @@ namespace PermaNotes.Platform.Windows
 
         private void DisableClickThrough(IntPtr hwnd)
         {
-            // Remove the transparent extended style
-            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
-
-            // Restore original WndProc
             if (_states.TryRemove(hwnd, out var state))
             {
                 SetWndProc(hwnd, state.OldProc);
             }
+
+            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED & ~WS_EX_TRANSPARENT);
         }
 
         private IntPtr SubClassWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)

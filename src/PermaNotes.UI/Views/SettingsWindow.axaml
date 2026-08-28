@@ -1,0 +1,112 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PermaNotes.UI.ViewModels"
+        x:Class="PermaNotes.UI.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="PermaNotes — Settings"
+        Width="480" Height="430"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://PermaNotes.UI/Assets/icon.ico">
+
+    <DockPanel Margin="20">
+        <!-- Bottom Action Bar -->
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10"
+                    Margin="0,16,0,0">
+            <Button Content="Cancel"
+                    Click="Cancel_Click"
+                    Padding="16,6"/>
+            <Button Content="Save Settings"
+                    Click="Save_Click"
+                    Classes="accent"
+                    FontWeight="SemiBold"
+                    Padding="16,6"/>
+        </StackPanel>
+
+        <!-- Main Form -->
+        <ScrollViewer>
+            <StackPanel Spacing="16">
+                <!-- System & Startup -->
+                <Border BorderBrush="#25000000" BorderThickness="1" CornerRadius="8" Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="System &amp; Behavior" FontWeight="SemiBold" FontSize="14"/>
+                        <CheckBox Content="Start PermaNotes when Windows starts"
+                                  IsChecked="{Binding StartWithWindows}"/>
+                        <CheckBox Content="Confirm before permanently deleting notes"
+                                  IsChecked="{Binding ConfirmBeforeDelete}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Defaults & Appearance -->
+                <Border BorderBrush="#25000000" BorderThickness="1" CornerRadius="8" Padding="14">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Default Note Appearance" FontWeight="SemiBold" FontSize="14"/>
+
+                        <!-- Color Presets -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Default Color:" FontSize="12" Opacity="0.8"/>
+                            <WrapPanel Margin="0,2">
+                                <Button Classes="ColorSwatch" Background="#FFF9C4" Click="ColorSwatch_Click" Tag="#FFF9C4" ToolTip.Tip="Yellow"/>
+                                <Button Classes="ColorSwatch" Background="#FFE0B2" Click="ColorSwatch_Click" Tag="#FFE0B2" ToolTip.Tip="Orange"/>
+                                <Button Classes="ColorSwatch" Background="#A5D6A7" Click="ColorSwatch_Click" Tag="#A5D6A7" ToolTip.Tip="Green"/>
+                                <Button Classes="ColorSwatch" Background="#80CBC4" Click="ColorSwatch_Click" Tag="#80CBC4" ToolTip.Tip="Teal"/>
+                                <Button Classes="ColorSwatch" Background="#90CAF9" Click="ColorSwatch_Click" Tag="#90CAF9" ToolTip.Tip="Blue"/>
+                                <Button Classes="ColorSwatch" Background="#CE93D8" Click="ColorSwatch_Click" Tag="#CE93D8" ToolTip.Tip="Purple"/>
+                                <Button Classes="ColorSwatch" Background="#F48FB1" Click="ColorSwatch_Click" Tag="#F48FB1" ToolTip.Tip="Pink"/>
+                                <Button Classes="ColorSwatch" Background="#FAFAFA" Click="ColorSwatch_Click" Tag="#FAFAFA" ToolTip.Tip="White"/>
+                                <Button Classes="ColorSwatch" Background="#E0E0E0" Click="ColorSwatch_Click" Tag="#E0E0E0" ToolTip.Tip="Gray"/>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <!-- Opacity Slider -->
+                        <StackPanel Spacing="4">
+                            <DockPanel>
+                                <TextBlock Text="{Binding DefaultOpacity, StringFormat='Default Opacity: {0:P0}'}"
+                                           FontSize="12"
+                                           Opacity="0.8"/>
+                            </DockPanel>
+                            <Slider Minimum="0.2" Maximum="1.0"
+                                    Value="{Binding DefaultOpacity, Mode=TwoWay}"
+                                    TickFrequency="0.05"
+                                    IsSnapToTickEnabled="True"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Storage Path -->
+                <Border BorderBrush="#25000000" BorderThickness="1" CornerRadius="8" Padding="14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Storage Directory" FontWeight="SemiBold" FontSize="14"/>
+                        <DockPanel LastChildFill="True">
+                            <Button DockPanel.Dock="Right"
+                                    Content="Browse..."
+                                    Click="BrowseStorage_Click"
+                                    Margin="8,0,0,0"
+                                    Padding="12,6"/>
+                            <TextBox Text="{Binding CustomStoragePath, Mode=TwoWay}"
+                                     FontSize="12"
+                                     VerticalContentAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock Text="Notes and metadata index are stored in this directory."
+                                   FontSize="11"
+                                   Opacity="0.6"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+
+    <Window.Styles>
+        <Style Selector="Button.ColorSwatch">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="CornerRadius" Value="13"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#40000000"/>
+        </Style>
+    </Window.Styles>
+</Window>

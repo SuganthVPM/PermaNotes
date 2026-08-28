@@ -1,0 +1,36 @@
+name: Build Avalonia (Windows + macOS)
+on: [push, pull_request]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet restore PermaNotes.sln
+      - run: dotnet build PermaNotes.sln -c Release
+      - run: dotnet test tests/PermaNotes.Core.Tests/ -c Release
+      - run: dotnet publish src/PermaNotes.Desktop/ -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: permaNotes-windows
+          path: dist/windows/
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet restore PermaNotes.sln
+      - run: dotnet publish src/PermaNotes.Desktop/ -c Release -r osx-arm64 --self-contained -o dist/macos-arm64
+      - run: dotnet publish src/PermaNotes.Desktop/ -c Release -r osx-x64 --self-contained -o dist/macos-x64
+      - run: dotnet tool install -g Avalonia.Parcel
+      - run: parcel package --input dist/macos-arm64 --format dmg --output dist/macos-dmg || echo "Parcel packaging skipped"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: permaNotes-macos
+          path: dist/macos-dmg/

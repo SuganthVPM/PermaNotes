@@ -20,3 +20,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# Avalonia
+src/**/bin/
+src/**/obj/
+tests/**/bin/
+tests/**/obj/

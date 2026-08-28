@@ -99,22 +99,18 @@ namespace PermaNotes.UI.Views
             _isInitializing = false;
         }
 
+        private PinWindow? _pinWindow;
+
         private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (DataContext is not NoteViewModel vm) return;
+            if (_isInitializing || sender is not NoteViewModel vm) return;
 
-            if (e.PropertyName == nameof(NoteViewModel.IsLocked))
+            if (e.PropertyName == nameof(NoteViewModel.IsGlassmorphic))
             {
-                ContentRichTextBox.IsReadOnly = vm.IsLocked;
-            }
-            else if (e.PropertyName == nameof(NoteViewModel.IsClosed))
-            {
-                if (vm.IsClosed) Hide();
-                else             Show();
+                _vibrancyService?.SetVibrancy(this, vm.IsGlassmorphic);
             }
             else if (e.PropertyName == nameof(NoteViewModel.IsAlwaysOnTop))
             {
-                Topmost = vm.IsAlwaysOnTop;
                 if (vm.IsAlwaysOnTop)
                 {
                     _desktopPinService?.Detach(this);
@@ -126,11 +122,41 @@ namespace PermaNotes.UI.Views
             }
             else if (e.PropertyName == nameof(NoteViewModel.IsClickThrough))
             {
-                ApplyClickThrough(vm);
+                if (vm.IsClickThrough)
+                {
+                    // Calculate absolute screen position of the ClickThroughBtn
+                    var pt = ClickThroughBtn.PointToScreen(new Avalonia.Point(0, 0));
+                    
+                    _pinWindow = new PinWindow(() =>
+                    {
+                        vm.IsClickThrough = false;
+                        vm.NotifyChange();
+                    });
+                    _pinWindow.Position = pt;
+                    _pinWindow.Width = ClickThroughBtn.Bounds.Width > 0 ? ClickThroughBtn.Bounds.Width : 28;
+                    _pinWindow.Height = ClickThroughBtn.Bounds.Height > 0 ? ClickThroughBtn.Bounds.Height : 28;
+                    _pinWindow.Show();
+                    
+                    _clickThroughService?.SetClickThrough(this, true, default);
+                }
+                else
+                {
+                    if (_pinWindow != null)
+                    {
+                        _pinWindow.Close();
+                        _pinWindow = null;
+                    }
+                    _clickThroughService?.SetClickThrough(this, false, default);
+                }
             }
-            else if (e.PropertyName == nameof(NoteViewModel.IsGlassmorphic))
+            else if (e.PropertyName == nameof(NoteViewModel.IsLocked))
             {
-                _vibrancyService?.SetVibrancy(this, vm.IsGlassmorphic);
+                ContentRichTextBox.IsReadOnly = vm.IsLocked;
+            }
+            else if (e.PropertyName == nameof(NoteViewModel.IsClosed))
+            {
+                if (vm.IsClosed) Hide();
+                else             Show();
             }
         }
 
