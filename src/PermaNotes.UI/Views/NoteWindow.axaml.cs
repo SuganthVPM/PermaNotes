@@ -31,6 +31,18 @@ namespace PermaNotes.UI.Views
             Loaded += NoteWindow_Loaded;
             PositionChanged += NoteWindow_PositionChanged;
             SizeChanged += NoteWindow_SizeChanged;
+
+            AddHandler(InputElement.PointerReleasedEvent, (s, e) =>
+            {
+                if (e.InitialPressMouseButton == MouseButton.Right)
+                {
+                    if (NoteContextMenu != null && !NoteContextMenu.IsOpen)
+                    {
+                        NoteContextMenu.Open(CardBorder);
+                        e.Handled = true;
+                    }
+                }
+            }, RoutingStrategies.Bubble | RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         public NoteWindow(
@@ -309,15 +321,17 @@ namespace PermaNotes.UI.Views
         // Clipboard
         private void Cut_Click(object? sender, RoutedEventArgs e)
         {
-            // Handled natively by keydown or selection
+            ContentRichTextBox.Cut();
         }
 
         private void Copy_Click(object? sender, RoutedEventArgs e)
         {
+            ContentRichTextBox.Copy();
         }
 
         private void Paste_Click(object? sender, RoutedEventArgs e)
         {
+            ContentRichTextBox.Paste();
         }
 
         // Window actions

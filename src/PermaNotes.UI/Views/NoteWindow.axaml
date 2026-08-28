@@ -17,7 +17,7 @@
 
     <Grid Margin="10">
         <Grid.ContextMenu>
-            <ContextMenu>
+            <ContextMenu x:Name="NoteContextMenu" Placement="Pointer">
                 <MenuItem Header="Cut" Click="Cut_Click" InputGesture="Ctrl+X"/>
                 <MenuItem Header="Copy" Click="Copy_Click" InputGesture="Ctrl+C"/>
                 <MenuItem Header="Paste" Click="Paste_Click" InputGesture="Ctrl+V"/>
@@ -249,6 +249,7 @@
                                        BorderThickness="0"
                                        Foreground="{Binding TextColor}"
                                        FontSize="14"
+                                       FontFamily="Segoe UI, Inter, Arial"
                                        Focusable="True"
                                        Padding="0"
                                        Margin="0"/>
