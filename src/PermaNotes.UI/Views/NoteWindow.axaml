@@ -265,6 +265,21 @@
                 </Grid>
             </DockPanel>
         </Border>
+
+        <!-- Perimeter Resize Handles (8 directions) -->
+        <Grid Name="ResizeGrid" IsVisible="{Binding !IsLocked}">
+            <!-- 4 Edges -->
+            <Border Name="ResizeTop" Height="8" VerticalAlignment="Top" Margin="14,0,14,0" Background="Transparent" Cursor="TopSide" PointerPressed="Resize_Top"/>
+            <Border Name="ResizeBottom" Height="8" VerticalAlignment="Bottom" Margin="14,0,14,0" Background="Transparent" Cursor="BottomSide" PointerPressed="Resize_Bottom"/>
+            <Border Name="ResizeLeft" Width="8" HorizontalAlignment="Left" Margin="0,14,0,14" Background="Transparent" Cursor="LeftSide" PointerPressed="Resize_Left"/>
+            <Border Name="ResizeRight" Width="8" HorizontalAlignment="Right" Margin="0,14,0,14" Background="Transparent" Cursor="RightSide" PointerPressed="Resize_Right"/>
+
+            <!-- 4 Corners -->
+            <Border Name="ResizeTopLeft" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" Cursor="TopLeftCorner" PointerPressed="Resize_TopLeft"/>
+            <Border Name="ResizeTopRight" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" Cursor="TopRightCorner" PointerPressed="Resize_TopRight"/>
+            <Border Name="ResizeBottomLeft" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomLeftCorner" PointerPressed="Resize_BottomLeft"/>
+            <Border Name="ResizeBottomRight" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" Cursor="BottomRightCorner" PointerPressed="Resize_BottomRight"/>
+        </Grid>
     </Grid>
 
     <Window.Styles>
@@ -306,8 +321,7 @@
             <Setter Property="Background" Value="#25FFFFFF"/>
             <Setter Property="Foreground" Value="{Binding HeaderColor}"/>
             <Setter Property="CaretBrush" Value="{Binding HeaderColor}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1.5"/>
-            <Setter Property="BorderBrush" Value="{Binding HeaderColor}"/>
+            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="CornerRadius" Value="4"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="14"/>
@@ -318,13 +332,11 @@
         </Style>
         <Style Selector="TextBox.TitleEditBoxStyle:pointerover /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="#35FFFFFF"/>
-            <Setter Property="BorderBrush" Value="{Binding HeaderColor}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1.5"/>
+            <Setter Property="BorderThickness" Value="0"/>
         </Style>
         <Style Selector="TextBox.TitleEditBoxStyle:focus /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="#40FFFFFF"/>
-            <Setter Property="BorderBrush" Value="{Binding HeaderColor}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1.5"/>
+            <Setter Property="BorderThickness" Value="0"/>
         </Style>
     </Window.Styles>
 </Window>

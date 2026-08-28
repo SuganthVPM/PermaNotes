@@ -275,15 +275,25 @@ namespace PermaNotes.UI.Views
             }
         }
 
-        private void ResizeGrip_PointerPressed(object? sender, PointerPressedEventArgs e)
+        private void Resize_Top(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.North, e);
+        private void Resize_Bottom(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.South, e);
+        private void Resize_Left(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.West, e);
+        private void Resize_Right(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.East, e);
+        private void Resize_TopLeft(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.NorthWest, e);
+        private void Resize_TopRight(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.NorthEast, e);
+        private void Resize_BottomLeft(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.SouthWest, e);
+        private void Resize_BottomRight(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.SouthEast, e);
+
+        private void HandleResize(WindowEdge edge, PointerPressedEventArgs e)
         {
             if (DataContext is NoteViewModel vm && vm.IsLocked) return;
-
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
-                BeginResizeDrag(WindowEdge.SouthEast, e);
+                BeginResizeDrag(edge, e);
             }
         }
+
+        private void ResizeGrip_PointerPressed(object? sender, PointerPressedEventArgs e) => HandleResize(WindowEdge.SouthEast, e);
 
         private void Title_DoubleTapped(object? sender, RoutedEventArgs e)
         {
