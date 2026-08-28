@@ -225,10 +225,8 @@
 
                         <!-- Title editor -->
                         <TextBox Name="TitleEditBox"
+                                 Classes="TitleEditBoxStyle"
                                  Text="{Binding Title, Mode=TwoWay}"
-                                 FontSize="14"
-                                 Height="28"
-                                 Padding="4,2"
                                  IsVisible="{Binding IsEditingTitle}"
                                  LostFocus="TitleEdit_LostFocus"
                                  KeyDown="TitleEdit_KeyDown"/>
@@ -301,6 +299,32 @@
         <Style Selector="Button.HeaderCloseBtn:pointerover">
             <Setter Property="Background" Value="#25E53935"/>
             <Setter Property="Foreground" Value="#E53935"/>
+        </Style>
+
+        <!-- Sleek Title Edit Box matching note styling -->
+        <Style Selector="TextBox.TitleEditBoxStyle">
+            <Setter Property="Background" Value="#25FFFFFF"/>
+            <Setter Property="Foreground" Value="{Binding HeaderColor}"/>
+            <Setter Property="CaretBrush" Value="{Binding HeaderColor}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1.5"/>
+            <Setter Property="BorderBrush" Value="{Binding HeaderColor}"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBox.TitleEditBoxStyle:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#35FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{Binding HeaderColor}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1.5"/>
+        </Style>
+        <Style Selector="TextBox.TitleEditBoxStyle:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#40FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{Binding HeaderColor}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1.5"/>
         </Style>
     </Window.Styles>
 </Window>
