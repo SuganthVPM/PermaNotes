@@ -62,7 +62,12 @@ namespace PermaNotes.UI.Views
                 {
                     try
                     {
-                        ContentRichTextBox.LoadRtf(vm.RtfText);
+                        // The original WPF app hardcoded the text color (e.g. \cf1) into the RTF when saving.
+                        // Since we want the text color to dynamically inherit from the Foreground property 
+                        // based on the note's background color, we strip out any explicit \cf color commands.
+                        string cleanedRtf = System.Text.RegularExpressions.Regex.Replace(vm.RtfText, @"\\cf[0-9]+\s?", "");
+                        ContentRichTextBox.LoadRtf(cleanedRtf);
+                        ContentRichTextBox.FlowDocument.PagePadding = new Thickness(0);
                     }
                     catch (Exception ex)
                     {
@@ -74,6 +79,7 @@ namespace PermaNotes.UI.Views
                     try
                     {
                         ContentRichTextBox.InsertText(vm.Text);
+                        ContentRichTextBox.FlowDocument.PagePadding = new Thickness(0);
                     }
                     catch { }
                 }

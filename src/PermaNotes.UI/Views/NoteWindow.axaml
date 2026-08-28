@@ -168,7 +168,7 @@
                         <!-- Lock Toggle -->
                         <Button Classes="HeaderIconBtn"
                                 Command="{Binding ToggleLockCommand}"
-                                ToolTip.Tip="Lock Note">
+                                ToolTip.Tip="{Binding LockToolTip}">
                             <Path Data="{Binding LockIconData}"
                                   Fill="{Binding IconColor}"
                                   Width="13" Height="14"
@@ -250,6 +250,7 @@
                                        Foreground="{Binding TextColor}"
                                        FontSize="14"
                                        Focusable="True"
+                                       Padding="0"
                                        Margin="0"/>
 
                     <!-- Resize Grip Bottom-Right -->
