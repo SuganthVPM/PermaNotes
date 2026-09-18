@@ -1085,14 +1085,19 @@ namespace DesktopNotes.Views
             if (textBeforeCaret == "#" || textBeforeCaret == "##" || textBeforeCaret == "###")
             {
                 textRangeBeforeCaret.Text = "";
-                
+
                 double size = textBeforeCaret == "#" ? 28.0 : textBeforeCaret == "##" ? 22.0 : 18.0;
                 currentParagraph.FontSize = size;
                 currentParagraph.FontWeight = FontWeights.Bold;
-                
+
+                // Position caret at paragraph start and set inline character formatting
+                // so that characters typed on this heading line inherit the size/weight.
+                // Without this, ApplyPropertyValue on an empty selection doesn't persist
+                // the format for subsequently typed characters in WPF.
+                ContentRichTextBox.CaretPosition = currentParagraph.ContentEnd;
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, size);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
-                
+
                 skipEnterBreak = true;
                 return true;
             }
@@ -1107,6 +1112,8 @@ namespace DesktopNotes.Views
             }
 
             // 5. Inline Formatting
+            // Note: *** must be checked BEFORE ** and * to avoid partial consumption.
+            if (TryApplyBoldItalic(caret, textBeforeCaret, triggerKey)) return true;
             if (TryApplyInlineFormatting(caret, textBeforeCaret, "**", TextElement.FontWeightProperty, FontWeights.Bold, triggerKey)) return true;
             if (TryApplyInlineFormatting(caret, textBeforeCaret, "*", TextElement.FontStyleProperty, FontStyles.Italic, triggerKey)) return true;
             if (TryApplyInlineFormatting(caret, textBeforeCaret, "~~", Inline.TextDecorationsProperty, TextDecorations.Strikethrough, triggerKey)) return true;
@@ -1214,6 +1221,65 @@ namespace DesktopNotes.Views
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Handles the <c>***text***</c> markdown shorthand for combined Bold + Italic.
+        /// Must be called before <see cref="TryApplyInlineFormatting"/> for <c>**</c> and <c>*</c>
+        /// to prevent partial delimiter consumption.
+        /// </summary>
+        private bool TryApplyBoldItalic(TextPointer caret, string textBeforeCaret, Key triggerKey)
+        {
+            const string delim = "***";
+            if (!textBeforeCaret.EndsWith(delim)) return false;
+
+            int lastMatch = textBeforeCaret.LastIndexOf(delim, textBeforeCaret.Length - 1 - delim.Length, StringComparison.Ordinal);
+            if (lastMatch < 0) return false;
+
+            int lengthToReplace = textBeforeCaret.Length - lastMatch;
+            TextPointer? startFormat = GetPointerAtBackwardOffset(caret, lengthToReplace);
+            if (startFormat == null) return false;
+
+            var formatRange = new TextRange(startFormat, caret);
+            string content = formatRange.Text;
+
+            if (!content.StartsWith(delim) || !content.EndsWith(delim) || content.Length <= delim.Length * 2)
+                return false;
+
+            string inner = content.Substring(delim.Length, content.Length - (delim.Length * 2));
+            if (string.IsNullOrWhiteSpace(inner) || inner.StartsWith(" ") || inner.EndsWith(" "))
+                return false;
+
+            // Remove leading ***
+            var leadingRange = new TextRange(startFormat, startFormat.GetPositionAtOffset(delim.Length, LogicalDirection.Forward));
+            leadingRange.Text = "";
+
+            // Remove trailing ***
+            TextPointer? newEnd = GetPointerAtBackwardOffset(caret, delim.Length);
+            if (newEnd == null) return false;
+
+            var trailingRange = new TextRange(newEnd, caret);
+            trailingRange.Text = "";
+
+            // Apply Bold + Italic to the inner content
+            var contentRange = new TextRange(startFormat, newEnd);
+            contentRange.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
+            contentRange.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Italic);
+
+            ContentRichTextBox.CaretPosition = contentRange.End;
+
+            if (triggerKey == Key.Space)
+            {
+                ContentRichTextBox.CaretPosition.InsertTextInRun(" ");
+                ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+            }
+
+            // Reset formatting on the character after the closing delimiter
+            var spaceRange = new TextRange(contentRange.End, ContentRichTextBox.CaretPosition);
+            spaceRange.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
+            spaceRange.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
+
+            return true;
         }
 
         private bool TryApplyHyperlink(TextPointer caret, string textBeforeCaret, Key triggerKey)
