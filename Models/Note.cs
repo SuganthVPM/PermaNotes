@@ -106,5 +106,10 @@ namespace DesktopNotes.Models
 
         /// <summary>Whether the scheduled reminder has already fired.</summary>
         public bool ReminderFired { get; set; } = false;
+
+        /// <summary>
+        /// When <c>true</c> the note is hidden from screen capture tools (Teams, Zoom, etc.).
+        /// </summary>
+        public bool IsHiddenFromCapture { get; set; } = false;
     }
 }

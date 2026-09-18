@@ -197,5 +197,12 @@ namespace DesktopNotes.Interop
 
         // Monitor flags
         public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+        // Screen Capture Affinity
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+        public const uint WDA_NONE = 0x00000000;
+        public const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
     }
 }
