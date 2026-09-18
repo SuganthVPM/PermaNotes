@@ -78,6 +78,7 @@ namespace DesktopNotes
 
         /// <summary>Fires every 60 s to trim the process working-set and encourage GC.</summary>
         private System.Timers.Timer? _memoryTimer;
+        private System.Timers.Timer? _reminderTimer;
 
         // --- Logging ---
         private static readonly string LogDir = Path.Combine(
@@ -91,6 +92,94 @@ namespace DesktopNotes
         public App()
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        }
+
+        // ===================== TOAST ACTIVATION =====================
+        
+        private void RegisterToastActivation()
+        {
+            Microsoft.Toolkit.Uwp.Notifications.ToastNotificationManagerCompat.OnActivated += e =>
+            {
+                // The user clicked on a toast notification
+                var args = Microsoft.Toolkit.Uwp.Notifications.ToastArguments.Parse(e.Argument);
+                if (args.Contains("action") && args["action"] == "open" && args.Contains("noteId"))
+                {
+                    string noteId = args["noteId"];
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel.Id.ToString() == noteId);
+                        if (window != null)
+                        {
+                            if (!window.IsVisible) window.Show();
+                            window.Activate();
+                            window.Focus();
+                        }
+                    }));
+                }
+            };
+        }
+
+        private void InitializeReminderMonitoring()
+        {
+            _reminderTimer = new System.Timers.Timer(10000); // Poll every 10 seconds
+            _reminderTimer.Elapsed += (s, e) => CheckDueReminders();
+            _reminderTimer.Start();
+        }
+
+        private void CheckDueReminders()
+        {
+            try
+            {
+                var now = DateTime.Now;
+                bool anyChanged = false;
+
+                foreach (var note in _allNotes)
+                {
+                    if (note.ReminderAt.HasValue && !note.ReminderFired && note.ReminderAt.Value <= now)
+                    {
+                        note.ReminderFired = true;
+                        anyChanged = true;
+
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                var reminderText = string.IsNullOrWhiteSpace(note.ReminderText) ? note.Title : note.ReminderText;
+                                new Microsoft.Toolkit.Uwp.Notifications.ToastContentBuilder()
+                                    .AddText("PermaNotes Reminder")
+                                    .AddText(reminderText)
+                                    .AddButton(new Microsoft.Toolkit.Uwp.Notifications.ToastButton("Open Note", $"action=open&noteId={note.Id}"))
+                                    .Show();
+                            }
+                            catch (Exception ex)
+                            {
+                                Trace($"Error showing reminder toast: {ex.Message}");
+                            }
+
+                            try
+                            {
+                                System.Media.SystemSounds.Exclamation.Play();
+                            }
+                            catch { }
+
+                            var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel.Id == note.Id);
+                            if (window != null)
+                            {
+                                window.UpdateReminderBadge();
+                            }
+                        }));
+                    }
+                }
+
+                if (anyChanged)
+                {
+                    _storageService.SaveNotesImmediate(_allNotes);
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace($"CheckDueReminders error: {ex.Message}");
+            }
         }
 
         // ===================== STARTUP =====================
@@ -137,10 +226,16 @@ namespace DesktopNotes
                 // --- Load and display notes ---
                 LoadNotes();
 
+                // --- Register Toast Activation ---
+                RegisterToastActivation();
+
                 // --- Memory Trimming ---
                 _memoryTimer = new System.Timers.Timer(30000); // Trim every 30 seconds
                 _memoryTimer.Elapsed += (s, e) => TrimMemory();
                 _memoryTimer.Start();
+
+                // --- Reminder Monitoring (Dual-layer: in-app timer + Windows scheduled toast) ---
+                InitializeReminderMonitoring();
 
                 // Post-startup trim after all WPF windows finish loading and rendering
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>
@@ -710,6 +805,10 @@ namespace DesktopNotes
             }
             catch { }
 
+            _reminderTimer?.Stop();
+            _reminderTimer?.Dispose();
+            _memoryTimer?.Stop();
+            _memoryTimer?.Dispose();
             _trayIcon?.Dispose();
             _singleInstanceMutex?.ReleaseMutex();
             _singleInstanceMutex?.Dispose();

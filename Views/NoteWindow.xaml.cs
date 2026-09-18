@@ -138,6 +138,8 @@ namespace DesktopNotes.Views
             Height = NoteModel.Height;
             TitleBlock.Text = NoteModel.Title;
             Topmost = NoteModel.IsAlwaysOnTop;
+            
+            UpdateReminderBadge();
 
             LocationChanged += NoteWindow_LocationChanged;
             SizeChanged += NoteWindow_SizeChanged;
@@ -527,6 +529,122 @@ namespace DesktopNotes.Views
             ContentRichTextBox.Focus();
             TriggerNoteSave();
         }
+
+        #region Reminder Feature
+
+        public void UpdateReminderBadge()
+        {
+            if (NoteModel.ReminderAt != null)
+            {
+                ReminderBadgeBtn.Visibility = Visibility.Visible;
+                bool isPast = NoteModel.ReminderAt.Value <= DateTime.Now;
+                string timeStr = NoteModel.ReminderAt.Value.Date == DateTime.Today
+                    ? NoteModel.ReminderAt.Value.ToString("HH:mm")
+                    : NoteModel.ReminderAt.Value.ToString("MMM dd HH:mm");
+
+                ReminderBadgeBtn.Content = isPast ? $"🔔 {timeStr} (Passed)" : $"🔔 {timeStr}";
+                
+                var noteText = string.IsNullOrWhiteSpace(NoteModel.ReminderText) ? NoteModel.Title : NoteModel.ReminderText;
+                ReminderBadgeBtn.ToolTip = $"Reminder: {noteText}\nTime: {NoteModel.ReminderAt.Value:yyyy-MM-dd HH:mm}\nStatus: {(isPast ? "Triggered / Passed" : "Scheduled")}\nClick to edit or remove";
+            }
+            else
+            {
+                ReminderBadgeBtn.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void SetReminder_Click(object sender, RoutedEventArgs e)
+        {
+            OpenReminderPopup();
+        }
+
+        private void ReminderBadge_Click(object sender, RoutedEventArgs e)
+        {
+            OpenReminderPopup();
+        }
+
+        private void OpenReminderPopup()
+        {
+            ReminderDatePicker.SelectedDate = NoteModel.ReminderAt?.Date ?? DateTime.Today;
+            ReminderTimeTextBox.Text = NoteModel.ReminderAt?.ToString("HH:mm") ?? DateTime.Now.AddMinutes(15).ToString("HH:mm");
+            ReminderTextBox.Text = string.IsNullOrWhiteSpace(NoteModel.ReminderText) ? NoteModel.Title : NoteModel.ReminderText;
+            
+            RemoveReminderBtn.Visibility = NoteModel.ReminderAt.HasValue ? Visibility.Visible : Visibility.Collapsed;
+            
+            ReminderPopup.PlacementTarget = this;
+            ReminderPopup.IsOpen = true;
+
+            ReminderTimeTextBox.Focus();
+            ReminderTimeTextBox.SelectAll();
+        }
+
+        private void CancelReminderPopup_Click(object sender, RoutedEventArgs e)
+        {
+            ReminderPopup.IsOpen = false;
+        }
+
+        private void RemoveReminder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DesktopNotes.Services.ReminderService.CancelReminder(NoteModel);
+            }
+            catch (Exception ex)
+            {
+                App.Trace($"Error canceling reminder: {ex.Message}");
+            }
+            
+            NoteModel.ReminderAt = null;
+            NoteModel.ReminderText = string.Empty;
+            NoteModel.ReminderToastTag = string.Empty;
+            NoteModel.ReminderFired = false;
+            
+            UpdateReminderBadge();
+            TriggerNoteSave();
+            
+            ReminderPopup.IsOpen = false;
+            ShowSavedIndicator("Reminder Removed");
+        }
+
+        private void SaveReminder_Click(object sender, RoutedEventArgs e)
+        {
+            if (ReminderDatePicker.SelectedDate.HasValue && 
+                TimeSpan.TryParse(ReminderTimeTextBox.Text.Trim(), out TimeSpan time))
+            {
+                var reminderTime = ReminderDatePicker.SelectedDate.Value.Date + time;
+                
+                if (reminderTime <= DateTime.Now)
+                {
+                    System.Windows.MessageBox.Show("Reminder time must be in the future.", "Invalid Time", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+
+                NoteModel.ReminderAt = reminderTime;
+                NoteModel.ReminderText = ReminderTextBox.Text.Trim();
+                NoteModel.ReminderFired = false;
+                
+                try
+                {
+                    DesktopNotes.Services.ReminderService.ScheduleReminder(NoteModel);
+                }
+                catch (Exception ex)
+                {
+                    App.Trace($"Error scheduling reminder: {ex.Message}");
+                }
+                
+                UpdateReminderBadge();
+                TriggerNoteSave();
+                
+                ReminderPopup.IsOpen = false;
+                ShowSavedIndicator("Reminder Set!");
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("Please enter a valid time in HH:mm format (e.g. 14:30).", "Invalid Time Format", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        #endregion
 
         /// <summary>
         /// Walks each <see cref="TextPointer"/> in the current selection and returns <c>true</c>
@@ -1012,7 +1130,8 @@ namespace DesktopNotes.Views
                     ContentRichTextBox.CaretPosition.Paragraph.ClearValue(TextElement.FontStyleProperty);
                 }
 
-                // Reset inline typing state (so bold, italic, strikethrough don't bleed)
+                // Reset inline typing state (so bold, italic, strikethrough, and header font size don't bleed)
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, 14.0);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
                 ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
@@ -1455,10 +1574,11 @@ namespace DesktopNotes.Views
             }
         }
 
-        private async void ShowSavedIndicator()
+        private async void ShowSavedIndicator(string text = "Saved")
         {
+            SavedIndicator.Text = text;
             SavedIndicator.Opacity = 1;
-            await System.Threading.Tasks.Task.Delay(1000);
+            await System.Threading.Tasks.Task.Delay(1200);
             var anim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromSeconds(0.5));
             SavedIndicator.BeginAnimation(UIElement.OpacityProperty, anim);
         }
