@@ -145,6 +145,18 @@ namespace DesktopNotes.Views
             System.Windows.DataObject.AddPastingHandler(ContentRichTextBox, ContentRichTextBox_Pasting);
             ContentRichTextBox.AddHandler(UIElement.QueryCursorEvent, new System.Windows.Input.QueryCursorEventHandler(ContentRichTextBox_QueryCursor), true);
 
+            // Override Ctrl+T on the RichTextBox directly so it always inserts a timestamp
+            // instead of being intercepted as a Tab character (AcceptsTab=True conflict).
+            var insertTimestampCommand = new RoutedCommand("InsertTimestamp", typeof(NoteWindow));
+            ContentRichTextBox.InputBindings.Add(
+                new KeyBinding(insertTimestampCommand, Key.T, ModifierKeys.Control));
+            ContentRichTextBox.CommandBindings.Add(
+                new CommandBinding(insertTimestampCommand, (s, ce) =>
+                {
+                    InsertTimestamp_Click(s, new RoutedEventArgs());
+                    ce.Handled = true;
+                }));
+
             if (TryFindResource("NoteContextMenu") is ContextMenu cm)
             {
                 foreach (var item in cm.Items)
