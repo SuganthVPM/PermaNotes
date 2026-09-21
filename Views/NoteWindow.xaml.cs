@@ -138,12 +138,26 @@ namespace DesktopNotes.Views
             Height = NoteModel.Height;
             TitleBlock.Text = NoteModel.Title;
             Topmost = NoteModel.IsAlwaysOnTop;
+            
+            UpdateReminderBadge();
 
             LocationChanged += NoteWindow_LocationChanged;
             SizeChanged += NoteWindow_SizeChanged;
 
             System.Windows.DataObject.AddPastingHandler(ContentRichTextBox, ContentRichTextBox_Pasting);
             ContentRichTextBox.AddHandler(UIElement.QueryCursorEvent, new System.Windows.Input.QueryCursorEventHandler(ContentRichTextBox_QueryCursor), true);
+
+            // Override Ctrl+T on the RichTextBox directly so it always inserts a timestamp
+            // instead of being intercepted as a Tab character (AcceptsTab=True conflict).
+            var insertTimestampCommand = new RoutedCommand("InsertTimestamp", typeof(NoteWindow));
+            ContentRichTextBox.InputBindings.Add(
+                new KeyBinding(insertTimestampCommand, Key.T, ModifierKeys.Control));
+            ContentRichTextBox.CommandBindings.Add(
+                new CommandBinding(insertTimestampCommand, (s, ce) =>
+                {
+                    InsertTimestamp_Click(s, new RoutedEventArgs());
+                    ce.Handled = true;
+                }));
 
             if (TryFindResource("NoteContextMenu") is ContextMenu cm)
             {
@@ -178,6 +192,9 @@ namespace DesktopNotes.Views
             ApplyBackgroundColor(NoteModel.BackgroundColor);
             UpdateLockUI();
             ApplyClickThroughState(); // restore persisted click-through state
+            
+            ApplyScreenCaptureAffinity(); // restore screen capture state
+            UpdateCaptureUI();
 
             _isInitializing = false;
         }
@@ -515,6 +532,122 @@ namespace DesktopNotes.Views
             ContentRichTextBox.Focus();
             TriggerNoteSave();
         }
+
+        #region Reminder Feature
+
+        public void UpdateReminderBadge()
+        {
+            if (NoteModel.ReminderAt != null)
+            {
+                ReminderBadgeBtn.Visibility = Visibility.Visible;
+                bool isPast = NoteModel.ReminderAt.Value <= DateTime.Now;
+                string timeStr = NoteModel.ReminderAt.Value.Date == DateTime.Today
+                    ? NoteModel.ReminderAt.Value.ToString("HH:mm")
+                    : NoteModel.ReminderAt.Value.ToString("MMM dd HH:mm");
+
+                ReminderBadgeBtn.Content = isPast ? $"🔔 {timeStr} (Passed)" : $"🔔 {timeStr}";
+                
+                var noteText = string.IsNullOrWhiteSpace(NoteModel.ReminderText) ? NoteModel.Title : NoteModel.ReminderText;
+                ReminderBadgeBtn.ToolTip = $"Reminder: {noteText}\nTime: {NoteModel.ReminderAt.Value:yyyy-MM-dd HH:mm}\nStatus: {(isPast ? "Triggered / Passed" : "Scheduled")}\nClick to edit or remove";
+            }
+            else
+            {
+                ReminderBadgeBtn.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void SetReminder_Click(object sender, RoutedEventArgs e)
+        {
+            OpenReminderPopup();
+        }
+
+        private void ReminderBadge_Click(object sender, RoutedEventArgs e)
+        {
+            OpenReminderPopup();
+        }
+
+        private void OpenReminderPopup()
+        {
+            ReminderDatePicker.SelectedDate = NoteModel.ReminderAt?.Date ?? DateTime.Today;
+            ReminderTimeTextBox.Text = NoteModel.ReminderAt?.ToString("HH:mm") ?? DateTime.Now.AddMinutes(15).ToString("HH:mm");
+            ReminderTextBox.Text = string.IsNullOrWhiteSpace(NoteModel.ReminderText) ? NoteModel.Title : NoteModel.ReminderText;
+            
+            RemoveReminderBtn.Visibility = NoteModel.ReminderAt.HasValue ? Visibility.Visible : Visibility.Collapsed;
+            
+            ReminderPopup.PlacementTarget = this;
+            ReminderPopup.IsOpen = true;
+
+            ReminderTimeTextBox.Focus();
+            ReminderTimeTextBox.SelectAll();
+        }
+
+        private void CancelReminderPopup_Click(object sender, RoutedEventArgs e)
+        {
+            ReminderPopup.IsOpen = false;
+        }
+
+        private void RemoveReminder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DesktopNotes.Services.ReminderService.CancelReminder(NoteModel);
+            }
+            catch (Exception ex)
+            {
+                App.Trace($"Error canceling reminder: {ex.Message}");
+            }
+            
+            NoteModel.ReminderAt = null;
+            NoteModel.ReminderText = string.Empty;
+            NoteModel.ReminderToastTag = string.Empty;
+            NoteModel.ReminderFired = false;
+            
+            UpdateReminderBadge();
+            TriggerNoteSave();
+            
+            ReminderPopup.IsOpen = false;
+            ShowSavedIndicator("Reminder Removed");
+        }
+
+        private void SaveReminder_Click(object sender, RoutedEventArgs e)
+        {
+            if (ReminderDatePicker.SelectedDate.HasValue && 
+                TimeSpan.TryParse(ReminderTimeTextBox.Text.Trim(), out TimeSpan time))
+            {
+                var reminderTime = ReminderDatePicker.SelectedDate.Value.Date + time;
+                
+                if (reminderTime <= DateTime.Now)
+                {
+                    System.Windows.MessageBox.Show("Reminder time must be in the future.", "Invalid Time", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+
+                NoteModel.ReminderAt = reminderTime;
+                NoteModel.ReminderText = ReminderTextBox.Text.Trim();
+                NoteModel.ReminderFired = false;
+                
+                try
+                {
+                    DesktopNotes.Services.ReminderService.ScheduleReminder(NoteModel);
+                }
+                catch (Exception ex)
+                {
+                    App.Trace($"Error scheduling reminder: {ex.Message}");
+                }
+                
+                UpdateReminderBadge();
+                TriggerNoteSave();
+                
+                ReminderPopup.IsOpen = false;
+                ShowSavedIndicator("Reminder Set!");
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("Please enter a valid time in HH:mm format (e.g. 14:30).", "Invalid Time Format", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        #endregion
 
         /// <summary>
         /// Walks each <see cref="TextPointer"/> in the current selection and returns <c>true</c>
@@ -1000,7 +1133,8 @@ namespace DesktopNotes.Views
                     ContentRichTextBox.CaretPosition.Paragraph.ClearValue(TextElement.FontStyleProperty);
                 }
 
-                // Reset inline typing state (so bold, italic, strikethrough don't bleed)
+                // Reset inline typing state (so bold, italic, strikethrough, and header font size don't bleed)
+                ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, 14.0);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
                 ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
@@ -1073,14 +1207,19 @@ namespace DesktopNotes.Views
             if (textBeforeCaret == "#" || textBeforeCaret == "##" || textBeforeCaret == "###")
             {
                 textRangeBeforeCaret.Text = "";
-                
+
                 double size = textBeforeCaret == "#" ? 28.0 : textBeforeCaret == "##" ? 22.0 : 18.0;
                 currentParagraph.FontSize = size;
                 currentParagraph.FontWeight = FontWeights.Bold;
-                
+
+                // Position caret at paragraph start and set inline character formatting
+                // so that characters typed on this heading line inherit the size/weight.
+                // Without this, ApplyPropertyValue on an empty selection doesn't persist
+                // the format for subsequently typed characters in WPF.
+                ContentRichTextBox.CaretPosition = currentParagraph.ContentEnd;
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, size);
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
-                
+
                 skipEnterBreak = true;
                 return true;
             }
@@ -1095,6 +1234,8 @@ namespace DesktopNotes.Views
             }
 
             // 5. Inline Formatting
+            // Note: *** must be checked BEFORE ** and * to avoid partial consumption.
+            if (TryApplyBoldItalic(caret, textBeforeCaret, triggerKey)) return true;
             if (TryApplyInlineFormatting(caret, textBeforeCaret, "**", TextElement.FontWeightProperty, FontWeights.Bold, triggerKey)) return true;
             if (TryApplyInlineFormatting(caret, textBeforeCaret, "*", TextElement.FontStyleProperty, FontStyles.Italic, triggerKey)) return true;
             if (TryApplyInlineFormatting(caret, textBeforeCaret, "~~", Inline.TextDecorationsProperty, TextDecorations.Strikethrough, triggerKey)) return true;
@@ -1202,6 +1343,65 @@ namespace DesktopNotes.Views
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Handles the <c>***text***</c> markdown shorthand for combined Bold + Italic.
+        /// Must be called before <see cref="TryApplyInlineFormatting"/> for <c>**</c> and <c>*</c>
+        /// to prevent partial delimiter consumption.
+        /// </summary>
+        private bool TryApplyBoldItalic(TextPointer caret, string textBeforeCaret, Key triggerKey)
+        {
+            const string delim = "***";
+            if (!textBeforeCaret.EndsWith(delim)) return false;
+
+            int lastMatch = textBeforeCaret.LastIndexOf(delim, textBeforeCaret.Length - 1 - delim.Length, StringComparison.Ordinal);
+            if (lastMatch < 0) return false;
+
+            int lengthToReplace = textBeforeCaret.Length - lastMatch;
+            TextPointer? startFormat = GetPointerAtBackwardOffset(caret, lengthToReplace);
+            if (startFormat == null) return false;
+
+            var formatRange = new TextRange(startFormat, caret);
+            string content = formatRange.Text;
+
+            if (!content.StartsWith(delim) || !content.EndsWith(delim) || content.Length <= delim.Length * 2)
+                return false;
+
+            string inner = content.Substring(delim.Length, content.Length - (delim.Length * 2));
+            if (string.IsNullOrWhiteSpace(inner) || inner.StartsWith(" ") || inner.EndsWith(" "))
+                return false;
+
+            // Remove leading ***
+            var leadingRange = new TextRange(startFormat, startFormat.GetPositionAtOffset(delim.Length, LogicalDirection.Forward));
+            leadingRange.Text = "";
+
+            // Remove trailing ***
+            TextPointer? newEnd = GetPointerAtBackwardOffset(caret, delim.Length);
+            if (newEnd == null) return false;
+
+            var trailingRange = new TextRange(newEnd, caret);
+            trailingRange.Text = "";
+
+            // Apply Bold + Italic to the inner content
+            var contentRange = new TextRange(startFormat, newEnd);
+            contentRange.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
+            contentRange.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Italic);
+
+            ContentRichTextBox.CaretPosition = contentRange.End;
+
+            if (triggerKey == Key.Space)
+            {
+                ContentRichTextBox.CaretPosition.InsertTextInRun(" ");
+                ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+            }
+
+            // Reset formatting on the character after the closing delimiter
+            var spaceRange = new TextRange(contentRange.End, ContentRichTextBox.CaretPosition);
+            spaceRange.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
+            spaceRange.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
+
+            return true;
         }
 
         private bool TryApplyHyperlink(TextPointer caret, string textBeforeCaret, Key triggerKey)
@@ -1377,10 +1577,11 @@ namespace DesktopNotes.Views
             }
         }
 
-        private async void ShowSavedIndicator()
+        private async void ShowSavedIndicator(string text = "Saved")
         {
+            SavedIndicator.Text = text;
             SavedIndicator.Opacity = 1;
-            await System.Threading.Tasks.Task.Delay(1000);
+            await System.Threading.Tasks.Task.Delay(1200);
             var anim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromSeconds(0.5));
             SavedIndicator.BeginAnimation(UIElement.OpacityProperty, anim);
         }
@@ -1449,7 +1650,8 @@ namespace DesktopNotes.Views
             {
                 try
                 {
-                    File.WriteAllText(sfd.FileName, NoteModel.Text);
+                    var textRange = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
+                    File.WriteAllText(sfd.FileName, textRange.Text);
                 }
                 catch (Exception ex)
                 {
@@ -1670,6 +1872,48 @@ namespace DesktopNotes.Views
             NoteChanged?.Invoke(this, EventArgs.Empty);
             ShowSavedIndicator();
         }
+
+        // --- Screen Capture Affinity ---
+
+        private void HideFromCaptureBtn_Click(object sender, RoutedEventArgs e)
+        {
+            NoteModel.IsHiddenFromCapture = !NoteModel.IsHiddenFromCapture;
+            ApplyScreenCaptureAffinity();
+            UpdateCaptureUI();
+            
+            NoteModel.UpdatedAt = DateTime.Now;
+            NoteChanged?.Invoke(this, EventArgs.Empty);
+            ShowSavedIndicator();
+        }
+
+        private void ApplyScreenCaptureAffinity()
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                uint affinity = NoteModel.IsHiddenFromCapture
+                    ? DesktopNotes.Interop.NativeMethods.WDA_EXCLUDEFROMCAPTURE
+                    : DesktopNotes.Interop.NativeMethods.WDA_NONE;
+                DesktopNotes.Interop.NativeMethods.SetWindowDisplayAffinity(hwnd, affinity);
+            }
+        }
+
+        private void UpdateCaptureUI()
+        {
+            if (NoteModel.IsHiddenFromCapture)
+            {
+                HideFromCaptureBtn.Opacity = 0.5; // visually indicate it is active
+                HideFromCaptureBtn.ToolTip = "Show in Screen Share";
+                HideFromCaptureIcon.Data = System.Windows.Media.Geometry.Parse("M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"); // Eye slash
+            }
+            else
+            {
+                HideFromCaptureBtn.Opacity = 1.0;
+                HideFromCaptureBtn.ToolTip = "Hide from Screen Share";
+                HideFromCaptureIcon.Data = System.Windows.Media.Geometry.Parse("M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"); // Eye
+            }
+        }
+
 
         // --- Always on Top ---
 

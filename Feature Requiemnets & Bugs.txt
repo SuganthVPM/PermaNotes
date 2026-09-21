@@ -1,0 +1,4 @@
+Ctrl + T --> Tab Space (Intended use - Timestamp)
+Heading MD Tags works, but when goes to next line, it cancels
+Set Reminder
+Not appearing on screen sharing

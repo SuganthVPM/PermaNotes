@@ -91,5 +91,25 @@ namespace DesktopNotes.Models
 
         /// <summary>UTC timestamp of the last content, position, or metadata change.</summary>
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
+        
+        /// <summary>When the Windows reminder toast is scheduled to fire. Null if no reminder set.</summary>
+        public DateTime? ReminderAt { get; set; } = null;
+
+        /// <summary>Custom text for the reminder notification. Defaults to the note title.</summary>
+        public string ReminderText { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The toast notification tag used to track/cancel the scheduled toast.
+        /// Persisted so we can cancel an existing reminder before replacing it.
+        /// </summary>
+        public string ReminderToastTag { get; set; } = string.Empty;
+
+        /// <summary>Whether the scheduled reminder has already fired.</summary>
+        public bool ReminderFired { get; set; } = false;
+
+        /// <summary>
+        /// When <c>true</c> the note is hidden from screen capture tools (Teams, Zoom, etc.).
+        /// </summary>
+        public bool IsHiddenFromCapture { get; set; } = false;
     }
 }

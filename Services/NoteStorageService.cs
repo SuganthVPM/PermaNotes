@@ -291,7 +291,12 @@ namespace DesktopNotes.Services
                     IsLocked = n.IsLocked,
                     IsClickThrough = n.IsClickThrough,
                     CreatedAt = n.CreatedAt,
-                    UpdatedAt = n.UpdatedAt
+                    UpdatedAt = n.UpdatedAt,
+                    ReminderAt = n.ReminderAt,
+                    ReminderText = n.ReminderText,
+                    ReminderToastTag = n.ReminderToastTag,
+                    ReminderFired = n.ReminderFired,
+                    IsHiddenFromCapture = n.IsHiddenFromCapture
                 });
             }
             return cloned;
