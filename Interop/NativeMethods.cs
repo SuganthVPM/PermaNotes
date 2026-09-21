@@ -19,8 +19,6 @@ namespace DesktopNotes.Interop
         [DllImport("user32.dll")]
         public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
         // --- Messaging ---
 
@@ -34,8 +32,6 @@ namespace DesktopNotes.Interop
 
         // --- Window hierarchy ---
 
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 
         // --- Window styles (32/64-bit safe) ---
 
@@ -86,11 +82,6 @@ namespace DesktopNotes.Interop
 
         // --- Monitor info ---
 
-        [DllImport("user32.dll")]
-        public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT
@@ -99,65 +90,7 @@ namespace DesktopNotes.Interop
             public int Y;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct RECT
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        public struct MONITORINFO
-        {
-            public int cbSize;
-            public RECT rcMonitor;
-            public RECT rcWork;
-            public uint dwFlags;
-        }
-
-        // --- Custom Cursor / Icon creation ---
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct ICONINFO
-        {
-            public bool fIcon;
-            public int xHotspot;
-            public int yHotspot;
-            public IntPtr hbmMask;
-            public IntPtr hbmColor;
-        }
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern IntPtr CreateIconIndirect(ref ICONINFO icon);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern bool DestroyIcon(IntPtr hIcon);
-
-        [DllImport("gdi32.dll", SetLastError = true)]
-        public static extern bool DeleteObject(IntPtr hObject);
-
-        // --- Shell notification icon (tray) ---
-
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        public static extern bool Shell_NotifyIcon(uint dwMessage, ref NOTIFYICONDATA lpData);
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        public struct NOTIFYICONDATA
-        {
-            public int cbSize;
-            public IntPtr hWnd;
-            public int uID;
-            public uint uFlags;
-            public uint uCallbackMessage;
-            public IntPtr hIcon;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-            public string szTip;
-        }
 
         // --- Constants ---
 
@@ -195,8 +128,6 @@ namespace DesktopNotes.Interop
         // WM messages
         public const int WM_HOTKEY = 0x0312;
 
-        // Monitor flags
-        public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
         // Screen Capture Affinity
         [DllImport("user32.dll", SetLastError = true)]

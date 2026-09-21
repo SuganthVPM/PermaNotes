@@ -306,7 +306,6 @@ namespace DesktopNotes
                     if (!note.IsAlwaysOnTop && !note.IsClickThrough)
                     {
                         _desktopWindowService.AttachWindow(window);
-                        RefreshDesktopZOrder();
                     }
                 }
                 catch (Exception ex) { Trace($"Attach error: {ex.Message}"); }
@@ -325,7 +324,6 @@ namespace DesktopNotes
                 else
                 {
                     _desktopWindowService.AttachWindow(window);
-                    RefreshDesktopZOrder();
                 }
             };
 
@@ -395,16 +393,6 @@ namespace DesktopNotes
             _activeNoteWindows.Remove(window);
             window.Close();
             OnNotesStateChanged();
-            RefreshDesktopZOrder();
-        }
-
-        /// <summary>
-        /// Reorders all desktop-attached notes so that newer notes appear above older notes,
-        /// while keeping all of them behind normal applications.
-        /// </summary>
-        internal void RefreshDesktopZOrder()
-        {
-            // Owner relationship with WorkerW handles desktop layer Z-ordering naturally.
         }
 
         /// <summary>
@@ -605,82 +593,7 @@ namespace DesktopNotes
             }
         }
 
-        private void ExportNotes()
-        {
-            var sfd = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-                DefaultExt = ".json",
-                FileName = $"DesktopNotes_Backup_{DateTime.Now:yyyyMMdd}"
-            };
-            
-            if (sfd.ShowDialog() == true)
-            {
-                try
-                {
-                    if (_allNotes.Count > 0)
-                    {
-                        var json = System.Text.Json.JsonSerializer.Serialize(_allNotes, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                        File.WriteAllText(sfd.FileName, json);
-                        MessageBox.Show("Notes exported successfully.", "Export Notes", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("No notes to export.", "Export Notes", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Export failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
 
-        private void ImportNotes()
-        {
-            var ofd = new Microsoft.Win32.OpenFileDialog
-            {
-                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-                DefaultExt = ".json"
-            };
-
-            if (ofd.ShowDialog() == true)
-            {
-                try
-                {
-                    string json = File.ReadAllText(ofd.FileName);
-                    var importedNotes = System.Text.Json.JsonSerializer.Deserialize<List<Note>>(json);
-                    
-                    if (importedNotes != null && importedNotes.Count > 0)
-                    {
-                        var result = MessageBox.Show($"Found {importedNotes.Count} notes to import. Do you want to add them to your existing notes?", 
-                            "Import Notes", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-                            
-                        if (result == MessageBoxResult.Yes)
-                        {
-                            foreach (var note in importedNotes)
-                            {
-                                // Generate new ID to avoid conflicts
-                                note.Id = Guid.NewGuid();
-                                note.IsClosed = false;
-                                // Offset slightly so they don't exactly overlap existing notes
-                                note.X += 20;
-                                note.Y += 20;
-                                
-                                _allNotes.Add(note);
-                                CreateNoteWindowInstance(note);
-                            }
-                            OnNotesStateChanged();
-                            MessageBox.Show("Notes imported successfully.", "Import Notes", MessageBoxButton.OK, MessageBoxImage.Information);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Import failed. Invalid file format or error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
 
         // ===================== GLOBAL HOTKEY (Ctrl+Alt+N) =====================
 

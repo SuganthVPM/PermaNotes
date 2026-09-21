@@ -1650,7 +1650,8 @@ namespace DesktopNotes.Views
             {
                 try
                 {
-                    File.WriteAllText(sfd.FileName, NoteModel.Text);
+                    var textRange = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
+                    File.WriteAllText(sfd.FileName, textRange.Text);
                 }
                 catch (Exception ex)
                 {
