@@ -119,6 +119,7 @@ namespace DesktopNotes.Views
                     ("fmt-headings",        "Headings"),
                     ("fmt-bold-italic",     "Bold, Italic & Underline"),
                     ("fmt-highlight-strike","Highlight & Strikethrough"),
+                    ("fmt-hyperlinks",      "Hyperlinks & URLs"),
                     ("fmt-lists",           "Lists & Checklists"),
                     ("fmt-divider",         "Horizontal Divider"),
                     ("fmt-toolbar",         "Floating Format Toolbar"),
@@ -620,7 +621,23 @@ namespace DesktopNotes.Views
                     p.Children.Add(Bullet("A\u2191 / A\u2193 \u2013 Increase or decrease font size"));
                     p.Children.Add(Bullet("Undo / Redo \u2013 History controls"));
                     p.Children.Add(Bullet("Clock \u2013 Insert current timestamp"));
+                    p.Children.Add(Bullet("Link \u2013 Format selected text as link or toggle auto-hyperlinks"));
                     p.Children.Add(Tip("The toolbar dismisses automatically when you click outside or clear your text selection."));
+                }),
+
+                ["fmt-hyperlinks"] = ("Hyperlinks & URLs", "Text Formatting", p =>
+                {
+                    p.Children.Add(Body("PermaNotes automatically detects web addresses and turns them into clickable hyperlinks."));
+                    p.Children.Add(SectionHeader("Automatic Link Detection"));
+                    p.Children.Add(Body("Pasting or typing any web address (e.g. https://google.com or www.example.com) automatically creates a clickable link."));
+                    p.Children.Add(SectionHeader("Opening Links"));
+                    p.Children.Add(Body("\u2022 Click: Click any link to open it directly in your default web browser."));
+                    p.Children.Add(Body("\u2022 Note Locked: Links also open directly with a single click when the note is locked."));
+                    p.Children.Add(SectionHeader("Markdown Link Syntax"));
+                    p.Children.Add(CodeRow("[Display Text](https://url.com)", "Custom text hyperlink"));
+                    p.Children.Add(SectionHeader("Enable / Disable Hyperlinks"));
+                    p.Children.Add(Body("Right-click any note \u2192 Format \u2192 toggle 'Hyperlinks' on or off. You can also click the link icon on the floating format toolbar to format or unlink selected text."));
+                    p.Children.Add(Tip("Hover over any link to preview the full destination address in a tooltip."));
                 }),
 
                 // -- Keyboard Shortcuts ---------------------------------------

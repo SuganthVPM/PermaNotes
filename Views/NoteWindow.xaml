@@ -41,6 +41,7 @@
                 <MenuItem Header="Strikethrough" Click="StrikethroughText_Click" InputGestureText="Ctrl+Shift+X" />
                 <Separator/>
                 <MenuItem Header="Highlight" Click="HighlightText_Click" InputGestureText="Ctrl+H" />
+                <MenuItem x:Name="HyperlinksMenuItem" Header="Hyperlinks" IsCheckable="True" Click="ToggleHyperlinks_Click" ToolTip="Automatically format URLs as clickable hyperlinks"/>
                 <Separator/>
                 <MenuItem Header="Font Size">
                     <MenuItem Header="10" Tag="10" Click="FontSizeMenu_Click" />
@@ -493,6 +494,10 @@
                     <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
                     <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="InsertTimestamp_Click" ToolTip="Insert Timestamp (Ctrl+T)">
                         <TextBlock Text="🕐" FontSize="12" Foreground="White"/>
+                    </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button x:Name="HyperlinksToolbarButton" Style="{StaticResource FormatToolbarButtonStyle}" Click="HyperlinksToolbarButton_Click" ToolTip="Format as Link (or toggle hyperlinks)">
+                        <Path x:Name="HyperlinksToolbarPath" Data="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" Fill="White" Stretch="Uniform" Width="12" Height="12"/>
                     </Button>
                 </StackPanel>
             </Border>

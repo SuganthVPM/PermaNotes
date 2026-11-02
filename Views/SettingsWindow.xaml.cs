@@ -162,6 +162,12 @@ namespace DesktopNotes.Views
         public string CustomStoragePath { get; set; } = "";
         public string LastSeenVersion { get; set; } = "";
 
+        /// <summary>
+        /// When <c>true</c> raw URLs pasted or typed into notes are automatically
+        /// converted to clickable hyperlinks. When <c>false</c> URLs stay as plain text.
+        /// </summary>
+        public bool HyperlinksEnabled { get; set; } = true;
+
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 #if DEV

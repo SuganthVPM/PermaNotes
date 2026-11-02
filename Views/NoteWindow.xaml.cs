@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -72,6 +73,7 @@ namespace DesktopNotes.Views
         /// </summary>
         private bool _isInitializing = true;
         private bool _isResizing = false;
+        private bool _isFormatting = false;
 
         /// <summary>
         /// Maps each preset note background hex colour to a darker border colour
@@ -146,6 +148,7 @@ namespace DesktopNotes.Views
 
             System.Windows.DataObject.AddPastingHandler(ContentRichTextBox, ContentRichTextBox_Pasting);
             ContentRichTextBox.AddHandler(UIElement.QueryCursorEvent, new System.Windows.Input.QueryCursorEventHandler(ContentRichTextBox_QueryCursor), true);
+            ContentRichTextBox.AddHandler(Hyperlink.RequestNavigateEvent, new System.Windows.Navigation.RequestNavigateEventHandler(Hyperlink_RequestNavigate));
 
             // Override Ctrl+T on the RichTextBox directly so it always inserts a timestamp
             // instead of being intercepted as a Tab character (AcceptsTab=True conflict).
@@ -732,8 +735,34 @@ namespace DesktopNotes.Views
             catch { }
         }
 
+        private static readonly System.Text.RegularExpressions.Regex UrlDetectionRegex = new(
+            @"(https?://[^\s<>""]+|www\.[^\s<>""]+)",
+            System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
         private void ContentRichTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
         {
+            if (NoteModel.IsLocked)
+            {
+                e.CancelCommand();
+                e.Handled = true;
+                return;
+            }
+
+            bool hyperlinksEnabled = AppSettings.Load().HyperlinksEnabled;
+
+            if (hyperlinksEnabled && e.DataObject != null && e.DataObject.GetDataPresent(System.Windows.DataFormats.UnicodeText))
+            {
+                string? text = e.DataObject.GetData(System.Windows.DataFormats.UnicodeText) as string;
+                if (!string.IsNullOrEmpty(text) && UrlDetectionRegex.IsMatch(text))
+                {
+                    e.CancelCommand();
+                    e.Handled = true;
+
+                    InsertPastedTextWithHyperlinks(text);
+                    return;
+                }
+            }
+
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
             {
                 SanitizeDocumentBackgrounds();
@@ -764,6 +793,11 @@ namespace DesktopNotes.Views
                         {
                             element.Foreground = darkText;
                         }
+
+                        if (element is Hyperlink hl)
+                        {
+                            FormatHyperlink(hl);
+                        }
                     }
                 }
                 pointer = pointer.GetNextContextPosition(LogicalDirection.Forward);
@@ -772,7 +806,7 @@ namespace DesktopNotes.Views
 
         private void ContentRichTextBox_SelectionChanged(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing) return;
+            if (_isInitializing || _isFormatting) return;
 
             // Trigger popup logic only if keyboard is used (Mouse released)
             if (Mouse.LeftButton == MouseButtonState.Released)
@@ -882,14 +916,21 @@ namespace DesktopNotes.Views
 
         private void ContentRichTextBox_QueryCursor(object sender, System.Windows.Input.QueryCursorEventArgs e)
         {
+            var pos = System.Windows.Input.Mouse.GetPosition(ContentRichTextBox);
+
             if (NoteModel.IsLocked)
             {
+                var link = GetHyperlinkAtPoint(pos);
+                if (link != null)
+                {
+                    e.Cursor = System.Windows.Input.Cursors.Hand;
+                    e.Handled = true;
+                    return;
+                }
                 e.Cursor = System.Windows.Input.Cursors.Arrow;
                 e.Handled = true;
                 return;
             }
-
-            var pos = System.Windows.Input.Mouse.GetPosition(ContentRichTextBox);
 
             // If mouse is over the vertical ScrollBar, use standard Arrow cursor
             if (IsOverScrollBar(e.OriginalSource as DependencyObject, pos, ContentRichTextBox))
@@ -903,6 +944,15 @@ namespace DesktopNotes.Views
             if (IsHoveringCheckbox(pos))
             {
                 e.Cursor = System.Windows.Input.Cursors.Arrow;
+                e.Handled = true;
+                return;
+            }
+
+            // If hovering over a hyperlink, use Hand cursor
+            var hoveredLink = GetHyperlinkAtPoint(pos);
+            if (hoveredLink != null)
+            {
+                e.Cursor = System.Windows.Input.Cursors.Hand;
                 e.Handled = true;
                 return;
             }
@@ -992,9 +1042,43 @@ namespace DesktopNotes.Views
 
         private void ContentRichTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            var pos = e.GetPosition(ContentRichTextBox);
+
+            // 1. Hyperlink navigation on click
+            var link = GetHyperlinkAtPoint(pos);
+            if (link != null)
+            {
+                var uri = link.NavigateUri;
+                if (uri != null)
+                {
+                    OpenHyperlinkUri(uri);
+                    e.Handled = true;
+                    return;
+                }
+                else
+                {
+                    string text = new TextRange(link.ContentStart, link.ContentEnd).Text.Trim();
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                            !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                            !text.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            text = "https://" + text;
+                        }
+                        if (Uri.TryCreate(text, UriKind.Absolute, out var parsedUri))
+                        {
+                            OpenHyperlinkUri(parsedUri);
+                            e.Handled = true;
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (NoteModel.IsLocked) return;
 
-            var pos = e.GetPosition(ContentRichTextBox);
+            // 2. Checkbox interactive toggle
             if (TryGetCheckboxAtPoint(pos, out var range, out char currentChar) && range != null)
             {
                 range.Text = currentChar == '☐' ? "☑" : "☐";
@@ -1406,6 +1490,9 @@ namespace DesktopNotes.Views
 
         private bool TryApplyHyperlink(TextPointer caret, string textBeforeCaret, Key triggerKey)
         {
+            if (!AppSettings.Load().HyperlinksEnabled) return false;
+
+            // 1. Markdown syntax: [title](url)
             var match = System.Text.RegularExpressions.Regex.Match(textBeforeCaret, @"\[([^\]]+)\]\(([^)]+)\)$");
             if (match.Success)
             {
@@ -1426,25 +1513,7 @@ namespace DesktopNotes.Views
                         linkUrl = "https://" + linkUrl;
                     }
 
-                    Hyperlink hyperlink = new Hyperlink(new Run(linkText), startFormat);
-                    hyperlink.ToolTip = "Ctrl+Click to follow link";
-                    
-                    try
-                    {
-                        hyperlink.NavigateUri = new Uri(linkUrl, UriKind.Absolute);
-                    }
-                    catch { /* Ignore invalid URI formats */ }
-
-                    hyperlink.RequestNavigate += (sender, args) =>
-                    {
-                        try
-                        {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(args.Uri.AbsoluteUri) { UseShellExecute = true });
-                        }
-                        catch { }
-                        args.Handled = true;
-                    };
-
+                    Hyperlink hyperlink = CreateHyperlinkElement(linkText, linkUrl, startFormat);
                     ContentRichTextBox.CaretPosition = hyperlink.ElementEnd;
 
                     if (triggerKey == Key.Space)
@@ -1460,6 +1529,44 @@ namespace DesktopNotes.Views
                     return true;
                 }
             }
+
+            // 2. Raw URL typed syntax: https://... or http://... or www....
+            var rawMatch = System.Text.RegularExpressions.Regex.Match(textBeforeCaret, @"((https?|ftp)://[^\s<>""]+|www\.[^\s<>""]+)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (rawMatch.Success)
+            {
+                int lengthToReplace = rawMatch.Length;
+                TextPointer? startFormat = GetPointerAtBackwardOffset(caret, lengthToReplace);
+                if (startFormat != null)
+                {
+                    var formatRange = new TextRange(startFormat, caret);
+                    formatRange.Text = ""; // Clear raw text
+
+                    string linkText = rawMatch.Value;
+                    string linkUrl = linkText;
+                    if (!linkUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
+                        !linkUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                        !linkUrl.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        linkUrl = "https://" + linkUrl;
+                    }
+
+                    Hyperlink hyperlink = CreateHyperlinkElement(linkText, linkUrl, startFormat);
+                    ContentRichTextBox.CaretPosition = hyperlink.ElementEnd;
+
+                    if (triggerKey == Key.Space)
+                    {
+                        ContentRichTextBox.CaretPosition.InsertTextInRun(" ");
+                        ContentRichTextBox.CaretPosition = ContentRichTextBox.CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? ContentRichTextBox.CaretPosition;
+                    }
+
+                    // Reset inline formatting
+                    ContentRichTextBox.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
+                    ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, ContentRichTextBox.Foreground ?? System.Windows.Media.Brushes.Black);
+
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -1514,7 +1621,11 @@ namespace DesktopNotes.Views
 
             if (!ContentRichTextBox.Selection.IsEmpty && !string.IsNullOrWhiteSpace(ContentRichTextBox.Selection.Text))
             {
-                FormatPopup.IsOpen = true;
+                UpdateHyperlinksToolbarState();
+                if (!FormatPopup.IsOpen)
+                {
+                    FormatPopup.IsOpen = true;
+                }
             }
             else
             {
@@ -1976,12 +2087,389 @@ namespace DesktopNotes.Views
                 {
                     clickThroughMenuItem.Header = NoteModel.IsClickThrough ? "Disable Click-Through" : "Enable Click-Through";
                 }
+
+                // Sync Hyperlinks checkmark in Format submenu
+                var formatMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Header?.ToString() == "Format");
+                if (formatMenuItem != null)
+                {
+                    var hlItem = formatMenuItem.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "HyperlinksMenuItem");
+                    if (hlItem != null)
+                    {
+                        hlItem.IsChecked = AppSettings.Load().HyperlinksEnabled;
+                    }
+                }
             }
         }
 
         private void HideFromCaptureMenu_Click(object sender, RoutedEventArgs e)
         {
             HideFromCaptureBtn_Click(sender, e);
+        }
+
+        // --- Hyperlink Management ---
+
+        private void ToggleHyperlinks_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = AppSettings.Load();
+            if (sender is MenuItem mi)
+            {
+                settings.HyperlinksEnabled = mi.IsChecked;
+            }
+            else
+            {
+                settings.HyperlinksEnabled = !settings.HyperlinksEnabled;
+            }
+            settings.Save();
+            UpdateHyperlinksToolbarState();
+        }
+
+        private void HyperlinksToolbarButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!ContentRichTextBox.Selection.IsEmpty && !string.IsNullOrWhiteSpace(ContentRichTextBox.Selection.Text))
+            {
+                ToggleSelectionHyperlink();
+            }
+            else
+            {
+                ToggleHyperlinks_Click(sender, e);
+            }
+        }
+
+        private void ToggleSelectionHyperlink()
+        {
+            if (ContentRichTextBox.Selection.IsEmpty) return;
+
+            _isFormatting = true;
+            try
+            {
+                Hyperlink? existingLink = FindHyperlinkInSelection(ContentRichTextBox.Selection);
+                if (existingLink != null)
+                {
+                    // Toggle OFF: unwrap hyperlink into plain runs
+                    var para = existingLink.Parent as Paragraph;
+                    if (para != null)
+                    {
+                        var inlinesToMove = new List<Inline>(existingLink.Inlines);
+                        TextPointer? firstStart = null;
+                        TextPointer? lastEnd = null;
+
+                        foreach (var inline in inlinesToMove)
+                        {
+                            existingLink.Inlines.Remove(inline);
+                            para.Inlines.InsertBefore(existingLink, inline);
+
+                            inline.ClearValue(Inline.TextDecorationsProperty);
+                            inline.ClearValue(TextElement.ForegroundProperty);
+
+                            if (firstStart == null) firstStart = inline.ContentStart;
+                            lastEnd = inline.ContentEnd;
+                        }
+                        para.Inlines.Remove(existingLink);
+
+                        if (firstStart != null && lastEnd != null)
+                        {
+                            ContentRichTextBox.Selection.Select(firstStart, lastEnd);
+                        }
+                    }
+
+                    SanitizeDocumentBackgrounds();
+                    TriggerNoteSave();
+                    UpdateHyperlinksToolbarState();
+                    return;
+                }
+
+                // Toggle ON: convert selection to hyperlink
+                var selRange = new TextRange(ContentRichTextBox.Selection.Start, ContentRichTextBox.Selection.End);
+                string rawText = selRange.Text.Trim();
+                if (string.IsNullOrEmpty(rawText)) return;
+
+                // Clean whitespace/newlines for URL target
+                string cleanTarget = System.Text.RegularExpressions.Regex.Replace(rawText, @"\s+", "");
+                if (!cleanTarget.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                    !cleanTarget.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                    !cleanTarget.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleanTarget = "https://" + cleanTarget;
+                }
+
+                selRange.Text = string.Empty;
+                var hyperlink = CreateHyperlinkElement(rawText, cleanTarget, selRange.Start);
+                ContentRichTextBox.Selection.Select(hyperlink.ContentStart, hyperlink.ContentEnd);
+
+                SanitizeDocumentBackgrounds();
+                TriggerNoteSave();
+                UpdateHyperlinksToolbarState();
+            }
+            catch { }
+            finally
+            {
+                _isFormatting = false;
+            }
+        }
+
+        private void UpdateHyperlinksToolbarState()
+        {
+            if (HyperlinksToolbarButton == null) return;
+
+            bool isSelectionLink = FindHyperlinkInSelection(ContentRichTextBox.Selection) != null;
+
+            if (isSelectionLink)
+            {
+                HyperlinksToolbarButton.ToolTip = "Remove Hyperlink (Click to unlink)";
+                if (HyperlinksToolbarPath != null)
+                {
+                    HyperlinksToolbarPath.Fill = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0xC3, 0xF7));
+                }
+            }
+            else
+            {
+                HyperlinksToolbarButton.ToolTip = "Format as Hyperlink";
+                if (HyperlinksToolbarPath != null)
+                {
+                    HyperlinksToolbarPath.Fill = System.Windows.Media.Brushes.White;
+                }
+            }
+        }
+
+        private Hyperlink? FindHyperlinkInSelection(TextSelection selection)
+        {
+            if (selection == null || selection.IsEmpty) return null;
+
+            try
+            {
+                TextPointer? ptrScan = selection.Start;
+                while (ptrScan != null && ptrScan.CompareTo(selection.End) <= 0)
+                {
+                    DependencyObject? parent = ptrScan.Parent as DependencyObject;
+                    while (parent != null && !(parent is FlowDocument))
+                    {
+                        if (parent is Hyperlink hl) return hl;
+                        if (parent is FrameworkContentElement fce) parent = fce.Parent as DependencyObject;
+                        else break;
+                    }
+
+                    if (ptrScan.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart)
+                    {
+                        if (ptrScan.GetAdjacentElement(LogicalDirection.Forward) is Hyperlink hl)
+                        {
+                            return hl;
+                        }
+                    }
+
+                    TextPointer? next = ptrScan.GetNextContextPosition(LogicalDirection.Forward);
+                    if (next == null || next.CompareTo(ptrScan) <= 0) break;
+                    ptrScan = next;
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private Hyperlink? GetHyperlinkAtPoint(System.Windows.Point pos)
+        {
+            try
+            {
+                // Try exact hit without snapping first
+                var pointer = ContentRichTextBox.GetPositionFromPoint(pos, false);
+                if (pointer == null)
+                {
+                    // Fallback to snap if close to text line
+                    pointer = ContentRichTextBox.GetPositionFromPoint(pos, true);
+                    if (pointer == null) return null;
+
+                    var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                    if (pos.Y < rect.Y - 5 || pos.Y > rect.Bottom + 5)
+                    {
+                        return null;
+                    }
+                }
+
+                var parent = pointer.Parent as DependencyObject;
+                while (parent != null && parent != ContentRichTextBox.Document && parent != ContentRichTextBox)
+                {
+                    if (parent is Hyperlink hyperlink) return hyperlink;
+                    if (parent is FrameworkContentElement fce) parent = fce.Parent as DependencyObject;
+                    else break;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private Hyperlink CreateHyperlinkElement(string displayText, string targetUrl, TextPointer? insertionPoint = null)
+        {
+            var linkRun = new Run(displayText);
+            Hyperlink link = insertionPoint != null 
+                ? new Hyperlink(linkRun, insertionPoint) 
+                : new Hyperlink(linkRun);
+
+            FormatHyperlink(link, targetUrl);
+            return link;
+        }
+
+        private void FormatHyperlink(Hyperlink link, string? targetUrl = null)
+        {
+            if (string.IsNullOrEmpty(targetUrl) && link.NavigateUri != null)
+            {
+                targetUrl = link.NavigateUri.AbsoluteUri;
+            }
+
+            if (!string.IsNullOrEmpty(targetUrl))
+            {
+                try
+                {
+                    link.NavigateUri = new Uri(targetUrl, UriKind.Absolute);
+                }
+                catch { }
+                link.ToolTip = "Click to open link (" + targetUrl + ")";
+            }
+
+            link.TextDecorations = TextDecorations.Underline;
+            link.Cursor = System.Windows.Input.Cursors.Hand;
+
+            bool isDark = false;
+            try
+            {
+                var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(NoteModel.BackgroundColor);
+                double lum = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+                isDark = lum < 0.5;
+            }
+            catch { }
+
+            link.Foreground = isDark 
+                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0xC3, 0xF7)) 
+                : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x66, 0xCC));
+
+            link.RequestNavigate -= Hyperlink_RequestNavigate;
+            link.RequestNavigate += Hyperlink_RequestNavigate;
+        }
+
+        private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            if (e.Uri != null)
+            {
+                OpenHyperlinkUri(e.Uri);
+            }
+            e.Handled = true;
+        }
+
+        private void OpenHyperlinkUri(Uri uri)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = uri.AbsoluteUri,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd", $"/c start \"\" \"{uri.AbsoluteUri}\"") { CreateNoWindow = true });
+                }
+                catch { }
+            }
+        }
+
+        private void InsertPastedTextWithHyperlinks(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            if (!ContentRichTextBox.Selection.IsEmpty)
+            {
+                ContentRichTextBox.Selection.Text = string.Empty;
+            }
+
+            TextPointer caret = ContentRichTextBox.CaretPosition;
+            string normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            string[] lines = normalized.Split('\n');
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                if (line.Length > 0)
+                {
+                    var matches = UrlDetectionRegex.Matches(line);
+                    if (matches.Count == 0)
+                    {
+                        var run = new Run(line, caret);
+                        caret = run.ElementEnd;
+                    }
+                    else
+                    {
+                        int lastIdx = 0;
+                        foreach (System.Text.RegularExpressions.Match match in matches)
+                        {
+                            if (match.Index > lastIdx)
+                            {
+                                string before = line.Substring(lastIdx, match.Index - lastIdx);
+                                var beforeRun = new Run(before, caret);
+                                caret = beforeRun.ElementEnd;
+                            }
+
+                            string rawUrl = match.Value;
+                            string trailingPunct = string.Empty;
+
+                            while (rawUrl.Length > 0 && (
+                                rawUrl.EndsWith(".") ||
+                                rawUrl.EndsWith(",") ||
+                                rawUrl.EndsWith(";") ||
+                                rawUrl.EndsWith(":") ||
+                                rawUrl.EndsWith("!") ||
+                                rawUrl.EndsWith("?") ||
+                                (rawUrl.EndsWith(")") && !rawUrl.Contains("(")) ||
+                                (rawUrl.EndsWith("]") && !rawUrl.Contains("["))))
+                            {
+                                trailingPunct = rawUrl[^1] + trailingPunct;
+                                rawUrl = rawUrl.Substring(0, rawUrl.Length - 1);
+                            }
+
+                            string targetUrl = rawUrl;
+                            if (!targetUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                                !targetUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                                !targetUrl.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                targetUrl = "https://" + targetUrl;
+                            }
+
+                            if (!string.IsNullOrEmpty(rawUrl))
+                            {
+                                var hl = CreateHyperlinkElement(rawUrl, targetUrl, caret);
+                                caret = hl.ElementEnd;
+                            }
+
+                            if (!string.IsNullOrEmpty(trailingPunct))
+                            {
+                                var punctRun = new Run(trailingPunct, caret);
+                                caret = punctRun.ElementEnd;
+                            }
+
+                            lastIdx = match.Index + match.Length;
+                        }
+
+                        if (lastIdx < line.Length)
+                        {
+                            string remaining = line.Substring(lastIdx);
+                            var remRun = new Run(remaining, caret);
+                            caret = remRun.ElementEnd;
+                        }
+                    }
+                }
+
+                if (i < lines.Length - 1)
+                {
+                    var lb = new LineBreak(caret);
+                    caret = lb.ElementEnd;
+                }
+            }
+
+            ContentRichTextBox.CaretPosition = caret;
+            SanitizeDocumentBackgrounds();
+            TriggerNoteSave();
         }
 
         // --- Help ---
