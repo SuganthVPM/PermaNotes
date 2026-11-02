@@ -1930,13 +1930,13 @@ namespace DesktopNotes.Views
             }
         }
 
-        // --- Context Menu Checkmarks ---
+        // --- Context Menu Checkmarks & State Sync ---
 
         private void ContextMenu_Opened(object sender, RoutedEventArgs e)
         {
             if (sender is ContextMenu menu)
             {
-                // Find OpacityMenuItem
+                // Sync Opacity checkmarks
                 var opacityMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "OpacityMenuItem");
                 if (opacityMenuItem != null)
                 {
@@ -1948,7 +1948,48 @@ namespace DesktopNotes.Views
                         }
                     }
                 }
+
+                // Sync Always on Top checkmark
+                var aotMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "AlwaysOnTopMenuItem");
+                if (aotMenuItem != null)
+                {
+                    aotMenuItem.IsChecked = NoteModel.IsAlwaysOnTop;
+                }
+
+                // Sync Hide from Screen Share checkmark
+                var hideCapMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "HideFromCaptureMenuItem");
+                if (hideCapMenuItem != null)
+                {
+                    hideCapMenuItem.IsChecked = NoteModel.IsHiddenFromCapture;
+                }
+
+                // Sync Lock Note header label
+                var lockMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "LockNoteMenuItem");
+                if (lockMenuItem != null)
+                {
+                    lockMenuItem.Header = NoteModel.IsLocked ? "Unlock Note" : "Lock Note";
+                }
+
+                // Sync Click-Through header label
+                var clickThroughMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Name == "ClickThroughMenuItem");
+                if (clickThroughMenuItem != null)
+                {
+                    clickThroughMenuItem.Header = NoteModel.IsClickThrough ? "Disable Click-Through" : "Enable Click-Through";
+                }
             }
+        }
+
+        private void HideFromCaptureMenu_Click(object sender, RoutedEventArgs e)
+        {
+            HideFromCaptureBtn_Click(sender, e);
+        }
+
+        // --- Help ---
+        private void HelpMenu_Click(object sender, RoutedEventArgs e)
+        {
+            var helpWindow = new HelpWindow();
+            helpWindow.Show();
+            helpWindow.Activate();
         }
 
         // --- Settings ---

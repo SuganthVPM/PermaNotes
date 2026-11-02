@@ -39,7 +39,11 @@ namespace DesktopNotes
         // --- Constants ---
 
         /// <summary>Named mutex that guarantees only one PermaNotes process runs at a time.</summary>
+#if DEV
+        private const string MutexName = "DesktopNotes_SingleInstance_DEV";
+#else
         private const string MutexName = "DesktopNotes_SingleInstance_F7A2B";
+#endif
 
         /// <summary>Win32 hotkey ID for Ctrl+Alt+N (create new note globally).</summary>
         private const int HOTKEY_ID_NEW_NOTE = 9001;
@@ -81,8 +85,13 @@ namespace DesktopNotes
         private System.Timers.Timer? _reminderTimer;
 
         // --- Logging ---
+#if DEV
+        private static readonly string LogDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNotes_Dev");
+#else
         private static readonly string LogDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNotes");
+#endif
         private static readonly string TraceLogPath = Path.Combine(LogDir, "app_trace.log");
 
         /// <summary>
@@ -236,6 +245,47 @@ namespace DesktopNotes
 
                 // --- Reminder Monitoring (Dual-layer: in-app timer + Windows scheduled toast) ---
                 InitializeReminderMonitoring();
+
+                // --- Show Onboarding / Updates Wizard ---
+                var settings = AppSettings.Load();
+                var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+                
+                bool forceTour = e.Args != null && e.Args.Any(a => a.Equals("--tour", StringComparison.OrdinalIgnoreCase) || a.Equals("--welcome", StringComparison.OrdinalIgnoreCase));
+                bool forceUpdateTour = e.Args != null && e.Args.Any(a => a.Equals("--tour-update", StringComparison.OrdinalIgnoreCase));
+
+                if (forceUpdateTour)
+                {
+                    var onboarding = new OnboardingWindow(OnboardingMode.Update);
+                    onboarding.Show();
+                    onboarding.Activate();
+                }
+                else if (forceTour || string.IsNullOrEmpty(settings.LastSeenVersion))
+                {
+                    // First time install or explicit CLI flag
+                    var onboarding = new OnboardingWindow(OnboardingMode.FirstTime);
+                    onboarding.Show();
+                    onboarding.Activate();
+                    if (!forceTour)
+                    {
+                        settings.LastSeenVersion = currentVersion;
+                        settings.Save();
+                    }
+                }
+                else if (settings.LastSeenVersion != currentVersion)
+                {
+                    // Update detected
+                    if (Version.TryParse(currentVersion, out var currV) && Version.TryParse(settings.LastSeenVersion, out var lastV))
+                    {
+                        if (currV > lastV)
+                        {
+                            var onboarding = new OnboardingWindow(OnboardingMode.Update);
+                            onboarding.Show();
+                            onboarding.Activate();
+                        }
+                    }
+                    settings.LastSeenVersion = currentVersion;
+                    settings.Save();
+                }
 
                 // Post-startup trim after all WPF windows finish loading and rendering
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>

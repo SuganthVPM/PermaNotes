@@ -1,5 +1,9 @@
 $ErrorActionPreference = "Stop"
 
+# Ensure local dotnet is found if not in default PATH
+if (Test-Path "$env:LOCALAPPDATA\Microsoft\dotnet") {
+    $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
+}
 Write-Host "Publishing PermaNotes for MSIX..." -ForegroundColor Cyan
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./dist/msix_staging
 

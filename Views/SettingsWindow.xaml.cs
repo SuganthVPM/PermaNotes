@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using DesktopNotes.Services;
 
 namespace DesktopNotes.Views
@@ -18,6 +19,11 @@ namespace DesktopNotes.Views
         {
             InitializeComponent();
             LoadSettings();
+        }
+
+        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            DragMove();
         }
 
         private void LoadSettings()
@@ -154,10 +160,15 @@ namespace DesktopNotes.Views
         public double DefaultOpacity { get; set; } = 1.0;
         public string DefaultNoteColor { get; set; } = "#FFF9C4";
         public string CustomStoragePath { get; set; } = "";
+        public string LastSeenVersion { get; set; } = "";
 
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+#if DEV
+            "DesktopNotes_Dev", "settings.json");
+#else
             "DesktopNotes", "settings.json");
+#endif
 
         public static AppSettings Load()
         {

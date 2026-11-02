@@ -29,7 +29,7 @@
 
         <!-- Full Context Menu -->
         <ContextMenu x:Key="NoteContextMenu" Opened="ContextMenu_Opened">
-            <!-- Context Menu (Reorganized) -->
+            <!-- 1. Text & Clipboard Operations -->
             <MenuItem Command="ApplicationCommands.Cut" Header="Cut" InputGestureText="Ctrl+X" />
             <MenuItem Command="ApplicationCommands.Copy" Header="Copy" InputGestureText="Ctrl+C" />
             <MenuItem Command="ApplicationCommands.Paste" Header="Paste" InputGestureText="Ctrl+V" />
@@ -58,15 +58,16 @@
                 <MenuItem Header="Timestamp" Click="InsertTimestamp_Click" InputGestureText="Ctrl+T" />
             </MenuItem>
             <Separator/>
+
+            <!-- 2. Note Operations & Search -->
             <MenuItem Header="New Note" Click="NewNoteButton_Click" InputGestureText="Ctrl+N" />
-            <MenuItem Header="Duplicate" Click="DuplicateNote_Click"/>
-            <Separator/>
+            <MenuItem Header="Duplicate Note" Click="DuplicateNote_Click"/>
+            <MenuItem Header="Search Notes" Click="SearchNoteButton_Click" InputGestureText="Ctrl+Alt+S"/>
             <MenuItem Header="Note Manager" Click="NoteManagerMenu_Click"/>
+            <MenuItem Header="Export as Text File..." Click="ExportNoteAsText_Click"/>
             <Separator/>
-            <MenuItem Header="Set Reminder..." Click="SetReminder_Click"/>
-            <Separator/>
-            <MenuItem Header="Export as Text File" Click="ExportNoteAsText_Click"/>
-            <Separator/>
+
+            <!-- 3. Appearance -->
             <MenuItem Header="Color">
                 <MenuItem Header="Yellow" Click="ColorMenu_Click" Tag="#FFF9C4">
                     <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#FFF9C4" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
@@ -109,14 +110,23 @@
                 <MenuItem Header="30%" Click="OpacityMenu_Click" Tag="0.30" IsCheckable="True"/>
             </MenuItem>
             <Separator/>
+
+            <!-- 4. Behavior, Security & Reminders -->
             <MenuItem x:Name="AlwaysOnTopMenuItem" Header="Always on Top" IsCheckable="True" Click="AlwaysOnTopMenu_Click"/>
-            <MenuItem x:Name="LockNoteMenuItem" Header="Lock Note" Click="LockNoteButton_Click" InputGestureText="Ctrl+Shift+L"/>
             <MenuItem x:Name="ClickThroughMenuItem" Header="Enable Click-Through" Click="ClickThroughMenu_Click"/>
+            <MenuItem x:Name="LockNoteMenuItem" Header="Lock Note" Click="LockNoteButton_Click" InputGestureText="Ctrl+Shift+L"/>
+            <MenuItem x:Name="HideFromCaptureMenuItem" Header="Hide from Screen Share" IsCheckable="True" Click="HideFromCaptureMenu_Click"/>
+            <MenuItem Header="Set Reminder..." Click="SetReminder_Click"/>
             <Separator/>
-            <MenuItem Header="Close this Note" Click="CloseNoteMenu_Click"/>
+
+            <!-- 5. Note Lifecycle -->
+            <MenuItem Header="Close Note" Click="CloseNoteMenu_Click"/>
             <MenuItem Header="Delete Note" Click="DeleteNoteButton_Click"/>
             <Separator/>
-            <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
+
+            <!-- 6. Application -->
+            <MenuItem Header="Settings..." Click="SettingsMenu_Click"/>
+            <MenuItem Header="Help &amp; Features" Click="HelpMenu_Click" FontWeight="SemiBold"/>
             <MenuItem Header="Exit PermaNotes" Click="ExitAppMenu_Click"/>
         </ContextMenu>
 
