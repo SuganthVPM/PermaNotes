@@ -350,6 +350,7 @@ namespace DesktopNotes.Views
 
         private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
             if (NoteModel.IsLocked) return;
 
             if (e.ButtonState == MouseButtonState.Pressed)
@@ -808,20 +809,24 @@ namespace DesktopNotes.Views
         {
             if (_isInitializing || _isFormatting) return;
 
-            // Trigger popup logic only if keyboard is used (Mouse released)
+            // Trigger popup logic only if mouse is released (keyboard caret movement or completed click)
             if (Mouse.LeftButton == MouseButtonState.Released)
             {
                 CheckFormatPopup();
+                CheckHyperlinkActionPopup();
             }
         }
 
         private void ContentRichTextBox_PreviewMouseUp(object sender, MouseButtonEventArgs e)
         {
             CheckFormatPopup();
+            CheckHyperlinkActionPopup(e.GetPosition(ContentRichTextBox));
         }
 
         private void ContentRichTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
+
             if (Keyboard.Modifiers == ModifierKeys.Control)
             {
                 // Let the RichTextBox handle zoom if Ctrl is pressed
@@ -932,6 +937,18 @@ namespace DesktopNotes.Views
                 return;
             }
 
+            // In unlocked mode, if holding Ctrl and hovering over a link, show Hand cursor (Ctrl+Click shortcut)
+            if (System.Windows.Input.Keyboard.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control))
+            {
+                var link = GetHyperlinkAtPoint(pos);
+                if (link != null)
+                {
+                    e.Cursor = System.Windows.Input.Cursors.Hand;
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             // If mouse is over the vertical ScrollBar, use standard Arrow cursor
             if (IsOverScrollBar(e.OriginalSource as DependencyObject, pos, ContentRichTextBox))
             {
@@ -948,16 +965,8 @@ namespace DesktopNotes.Views
                 return;
             }
 
-            // If hovering over a hyperlink, use Hand cursor
-            var hoveredLink = GetHyperlinkAtPoint(pos);
-            if (hoveredLink != null)
-            {
-                e.Cursor = System.Windows.Input.Cursors.Hand;
-                e.Handled = true;
-                return;
-            }
-
-            // In editable text area, use custom High-Contrast I-Beam
+            // In editable text area (including hyperlinks), use custom High-Contrast I-Beam
+            // so text remains naturally selectable and editable
             e.Cursor = GetHighContrastIBeamCursor();
             e.Handled = true;
         }
@@ -1044,47 +1053,50 @@ namespace DesktopNotes.Views
         {
             var pos = e.GetPosition(ContentRichTextBox);
 
-            // 1. Hyperlink navigation on click
-            var link = GetHyperlinkAtPoint(pos);
-            if (link != null)
+            // 1. In locked mode, clicking a hyperlink opens it directly in browser
+            if (NoteModel.IsLocked)
             {
-                var uri = link.NavigateUri;
-                if (uri != null)
+                var link = GetHyperlinkAtPoint(pos);
+                if (link != null)
                 {
-                    OpenHyperlinkUri(uri);
+                    OpenHyperlinkElement(link);
                     e.Handled = true;
                     return;
                 }
-                else
+                return;
+            }
+
+            // 2. Ctrl+Click on hyperlink opens directly in default browser
+            if (System.Windows.Input.Keyboard.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control))
+            {
+                var link = GetHyperlinkAtPoint(pos);
+                if (link != null)
                 {
-                    string text = new TextRange(link.ContentStart, link.ContentEnd).Text.Trim();
-                    if (!string.IsNullOrEmpty(text))
-                    {
-                        if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                            !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
-                            !text.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            text = "https://" + text;
-                        }
-                        if (Uri.TryCreate(text, UriKind.Absolute, out var parsedUri))
-                        {
-                            OpenHyperlinkUri(parsedUri);
-                            e.Handled = true;
-                            return;
-                        }
-                    }
+                    OpenHyperlinkElement(link);
+                    e.Handled = true;
+                    return;
                 }
             }
 
-            if (NoteModel.IsLocked) return;
+            // 3. If clicking outside the active hyperlink, close HyperlinkActionPopup
+            var clickedLink = GetHyperlinkAtPoint(pos);
+            if (clickedLink == null && HyperlinkActionPopup != null && HyperlinkActionPopup.IsOpen)
+            {
+                HyperlinkActionPopup.IsOpen = false;
+            }
 
-            // 2. Checkbox interactive toggle
+            // 4. Checkbox interactive toggle
             if (TryGetCheckboxAtPoint(pos, out var range, out char currentChar) && range != null)
             {
                 range.Text = currentChar == '☐' ? "☑" : "☐";
                 e.Handled = true;
                 TriggerNoteSave();
+                return;
             }
+
+            // 5. Normal click on editable text (including hyperlinks):
+            // DO NOT set e.Handled = true here.
+            // Allow RichTextBox to naturally place caret and allow drag text selection.
         }
 
         private void TriggerNoteSave()
@@ -1121,6 +1133,14 @@ namespace DesktopNotes.Views
 
         private void ContentRichTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
+            if (HyperlinkActionPopup != null && HyperlinkActionPopup.IsOpen &&
+                e.Key != Key.LeftCtrl && e.Key != Key.RightCtrl &&
+                e.Key != Key.LeftShift && e.Key != Key.RightShift &&
+                e.Key != Key.LeftAlt && e.Key != Key.RightAlt)
+            {
+                HyperlinkActionPopup.IsOpen = false;
+            }
+
             if (NoteModel.IsLocked) return;
 
             // Handle Backspace immediately after checkbox
@@ -1616,11 +1636,13 @@ namespace DesktopNotes.Views
             if (NoteModel.IsLocked)
             {
                 FormatPopup.IsOpen = false;
+                if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
                 return;
             }
 
             if (!ContentRichTextBox.Selection.IsEmpty && !string.IsNullOrWhiteSpace(ContentRichTextBox.Selection.Text))
             {
+                if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
                 UpdateHyperlinksToolbarState();
                 if (!FormatPopup.IsOpen)
                 {
@@ -1635,6 +1657,11 @@ namespace DesktopNotes.Views
 
         private void ContentRichTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (HyperlinkActionPopup != null && HyperlinkActionPopup.IsOpen)
+            {
+                HyperlinkActionPopup.IsOpen = false;
+            }
+
             if (_isInitializing || NoteModel.IsLocked) return;
 
             // Generate RTF on the fly
@@ -1720,6 +1747,7 @@ namespace DesktopNotes.Views
                 TitleBlock.Cursor = System.Windows.Input.Cursors.Arrow;
                 ResizeGrid.Visibility = Visibility.Collapsed;
                 FormatPopup.IsOpen = false;
+                if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
             }
             else
             {
@@ -2145,36 +2173,7 @@ namespace DesktopNotes.Views
                 Hyperlink? existingLink = FindHyperlinkInSelection(ContentRichTextBox.Selection);
                 if (existingLink != null)
                 {
-                    // Toggle OFF: unwrap hyperlink into plain runs
-                    var para = existingLink.Parent as Paragraph;
-                    if (para != null)
-                    {
-                        var inlinesToMove = new List<Inline>(existingLink.Inlines);
-                        TextPointer? firstStart = null;
-                        TextPointer? lastEnd = null;
-
-                        foreach (var inline in inlinesToMove)
-                        {
-                            existingLink.Inlines.Remove(inline);
-                            para.Inlines.InsertBefore(existingLink, inline);
-
-                            inline.ClearValue(Inline.TextDecorationsProperty);
-                            inline.ClearValue(TextElement.ForegroundProperty);
-
-                            if (firstStart == null) firstStart = inline.ContentStart;
-                            lastEnd = inline.ContentEnd;
-                        }
-                        para.Inlines.Remove(existingLink);
-
-                        if (firstStart != null && lastEnd != null)
-                        {
-                            ContentRichTextBox.Selection.Select(firstStart, lastEnd);
-                        }
-                    }
-
-                    SanitizeDocumentBackgrounds();
-                    TriggerNoteSave();
-                    UpdateHyperlinksToolbarState();
+                    RemoveHyperlink(existingLink);
                     return;
                 }
 
@@ -2266,35 +2265,273 @@ namespace DesktopNotes.Views
             return null;
         }
 
-        private Hyperlink? GetHyperlinkAtPoint(System.Windows.Point pos)
+        private Hyperlink? _activeHyperlink = null;
+
+        private Hyperlink? GetHyperlinkFromPointer(TextPointer? pointer)
         {
+            if (pointer == null) return null;
             try
             {
-                // Try exact hit without snapping first
-                var pointer = ContentRichTextBox.GetPositionFromPoint(pos, false);
-                if (pointer == null)
-                {
-                    // Fallback to snap if close to text line
-                    pointer = ContentRichTextBox.GetPositionFromPoint(pos, true);
-                    if (pointer == null) return null;
-
-                    var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
-                    if (pos.Y < rect.Y - 5 || pos.Y > rect.Bottom + 5)
-                    {
-                        return null;
-                    }
-                }
-
-                var parent = pointer.Parent as DependencyObject;
+                DependencyObject? parent = pointer.Parent as DependencyObject;
                 while (parent != null && parent != ContentRichTextBox.Document && parent != ContentRichTextBox)
                 {
-                    if (parent is Hyperlink hyperlink) return hyperlink;
+                    if (parent is Hyperlink hl) return hl;
                     if (parent is FrameworkContentElement fce) parent = fce.Parent as DependencyObject;
                     else break;
                 }
             }
             catch { }
             return null;
+        }
+
+        private Hyperlink? GetHyperlinkAtPoint(System.Windows.Point pos)
+        {
+            try
+            {
+                // 1. Try exact hit without snapping first
+                var pointer = ContentRichTextBox.GetPositionFromPoint(pos, false);
+                if (pointer != null)
+                {
+                    var hl = GetHyperlinkFromPointer(pointer);
+                    if (hl != null) return hl;
+                }
+
+                // 2. Try snap-to-text, BUT strictly verify that pos falls within the hyperlink's character bounds
+                var snapPointer = ContentRichTextBox.GetPositionFromPoint(pos, true);
+                if (snapPointer != null)
+                {
+                    var hl = GetHyperlinkFromPointer(snapPointer);
+                    if (hl != null)
+                    {
+                        var startRect = hl.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+                        var endRect = hl.ContentEnd.GetCharacterRect(LogicalDirection.Backward);
+
+                        if (Math.Abs(startRect.Top - endRect.Top) < 6)
+                        {
+                            // Single-line link bounds
+                            double minX = Math.Min(startRect.Left, endRect.Right) - 3;
+                            double maxX = Math.Max(startRect.Left, endRect.Right) + 3;
+                            double minY = Math.Min(startRect.Top, endRect.Top) - 4;
+                            double maxY = Math.Max(startRect.Bottom, endRect.Bottom) + 4;
+
+                            if (pos.X >= minX && pos.X <= maxX && pos.Y >= minY && pos.Y <= maxY)
+                            {
+                                return hl;
+                            }
+                        }
+                        else
+                        {
+                            // Multi-line link: check snap pointer's character rect
+                            var charRect = snapPointer.GetCharacterRect(LogicalDirection.Forward);
+                            var expanded = new Rect(charRect.X - 3, charRect.Y - 3, charRect.Width + 6, charRect.Height + 6);
+                            if (expanded.Contains(pos))
+                            {
+                                return hl;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private void CheckHyperlinkActionPopup(System.Windows.Point? clickPos = null)
+        {
+            if (NoteModel.IsLocked || _isInitializing || _isFormatting || HyperlinkActionPopup == null)
+            {
+                if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
+                return;
+            }
+
+            // If text is actively selected across a range (not just a caret), FormatPopup handles formatting
+            if (!ContentRichTextBox.Selection.IsEmpty && !string.IsNullOrWhiteSpace(ContentRichTextBox.Selection.Text))
+            {
+                HyperlinkActionPopup.IsOpen = false;
+                return;
+            }
+
+            Hyperlink? link = null;
+            if (clickPos.HasValue)
+            {
+                link = GetHyperlinkAtPoint(clickPos.Value);
+            }
+            else
+            {
+                link = GetHyperlinkFromPointer(ContentRichTextBox.CaretPosition);
+            }
+
+            if (link != null)
+            {
+                ShowHyperlinkActionPopup(link);
+            }
+            else
+            {
+                HyperlinkActionPopup.IsOpen = false;
+            }
+        }
+
+        private void ShowHyperlinkActionPopup(Hyperlink hyperlink)
+        {
+            if (NoteModel.IsLocked || HyperlinkActionPopup == null) return;
+
+            _activeHyperlink = hyperlink;
+            string url = GetHyperlinkTargetUrl(hyperlink);
+
+            HyperlinkPopupUrlText.Text = url;
+            HyperlinkPopupUrlText.ToolTip = url;
+
+            try
+            {
+                Rect startRect = hyperlink.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+                double x = Math.Max(2, startRect.Left);
+                double y = startRect.Bottom + 4;
+
+                if (y + 36 > ContentRichTextBox.ActualHeight && startRect.Top - 36 > 0)
+                {
+                    y = startRect.Top - 36;
+                }
+
+                if (HyperlinkActionPopup.IsOpen)
+                {
+                    HyperlinkActionPopup.IsOpen = false;
+                }
+
+                HyperlinkActionPopup.PlacementTarget = ContentRichTextBox;
+                HyperlinkActionPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
+                HyperlinkActionPopup.HorizontalOffset = x;
+                HyperlinkActionPopup.VerticalOffset = y;
+                HyperlinkActionPopup.IsOpen = true;
+            }
+            catch
+            {
+                HyperlinkActionPopup.IsOpen = true;
+            }
+        }
+
+        private void HyperlinkPopupUrlText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
+            if (_activeHyperlink != null)
+            {
+                OpenHyperlinkElement(_activeHyperlink);
+            }
+            e.Handled = true;
+        }
+
+        private void CopyHyperlinkBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeHyperlink != null)
+            {
+                string url = GetHyperlinkTargetUrl(_activeHyperlink);
+                try
+                {
+                    System.Windows.Clipboard.SetDataObject(new System.Windows.DataObject(System.Windows.DataFormats.UnicodeText, url), true);
+                    CopyHyperlinkBtn.ToolTip = "Copied!";
+                    var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+                    timer.Tick += (s, args) =>
+                    {
+                        CopyHyperlinkBtn.ToolTip = "Copy link address";
+                        timer.Stop();
+                    };
+                    timer.Start();
+                }
+                catch { }
+            }
+        }
+
+        private void RemoveHyperlink(Hyperlink hyperlink)
+        {
+            _isFormatting = true;
+            try
+            {
+                var para = hyperlink.Parent as Paragraph;
+                if (para != null)
+                {
+                    var inlinesToMove = new List<Inline>(hyperlink.Inlines);
+                    TextPointer? firstStart = null;
+                    TextPointer? lastEnd = null;
+
+                    foreach (var inline in inlinesToMove)
+                    {
+                        hyperlink.Inlines.Remove(inline);
+                        para.Inlines.InsertBefore(hyperlink, inline);
+
+                        inline.ClearValue(Inline.TextDecorationsProperty);
+                        inline.ClearValue(TextElement.ForegroundProperty);
+
+                        if (firstStart == null) firstStart = inline.ContentStart;
+                        lastEnd = inline.ContentEnd;
+                    }
+                    para.Inlines.Remove(hyperlink);
+
+                    if (firstStart != null && lastEnd != null)
+                    {
+                        ContentRichTextBox.Selection.Select(firstStart, lastEnd);
+                    }
+                }
+
+                SanitizeDocumentBackgrounds();
+                TriggerNoteSave();
+                UpdateHyperlinksToolbarState();
+            }
+            catch { }
+            finally
+            {
+                _isFormatting = false;
+            }
+        }
+
+        private string GetHyperlinkTargetUrl(Hyperlink link)
+        {
+            if (link.NavigateUri != null)
+            {
+                return link.NavigateUri.AbsoluteUri;
+            }
+            string text = new TextRange(link.ContentStart, link.ContentEnd).Text.Trim();
+            if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                !text.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            {
+                text = "https://" + text;
+            }
+            return text;
+        }
+
+        private void OpenHyperlinkElement(Hyperlink link)
+        {
+            string url = GetHyperlinkTargetUrl(link);
+            OpenHyperlinkUriString(url);
+        }
+
+        private void OpenHyperlinkUriString(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            {
+                url = "https://" + url;
+            }
+
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                OpenHyperlinkUri(uri);
+            }
+            else
+            {
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+                catch { }
+            }
         }
 
         private Hyperlink CreateHyperlinkElement(string displayText, string targetUrl, TextPointer? insertionPoint = null)
@@ -2322,11 +2559,11 @@ namespace DesktopNotes.Views
                     link.NavigateUri = new Uri(targetUrl, UriKind.Absolute);
                 }
                 catch { }
-                link.ToolTip = "Click to open link (" + targetUrl + ")";
+                link.ToolTip = "Hyperlink: " + targetUrl + " (Click to open menu, or Ctrl+Click to open)";
             }
 
             link.TextDecorations = TextDecorations.Underline;
-            link.Cursor = System.Windows.Input.Cursors.Hand;
+            link.Cursor = null; // Controlled dynamically by QueryCursor (IBeam in edit mode, Hand in locked or with Ctrl)
 
             bool isDark = false;
             try
@@ -2347,7 +2584,7 @@ namespace DesktopNotes.Views
 
         private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
         {
-            if (e.Uri != null)
+            if (NoteModel.IsLocked && e.Uri != null)
             {
                 OpenHyperlinkUri(e.Uri);
             }

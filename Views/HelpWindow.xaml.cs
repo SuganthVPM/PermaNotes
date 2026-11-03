@@ -630,14 +630,16 @@ namespace DesktopNotes.Views
                     p.Children.Add(Body("PermaNotes automatically detects web addresses and turns them into clickable hyperlinks."));
                     p.Children.Add(SectionHeader("Automatic Link Detection"));
                     p.Children.Add(Body("Pasting or typing any web address (e.g. https://google.com or www.example.com) automatically creates a clickable link."));
-                    p.Children.Add(SectionHeader("Opening Links"));
-                    p.Children.Add(Body("\u2022 Click: Click any link to open it directly in your default web browser."));
-                    p.Children.Add(Body("\u2022 Note Locked: Links also open directly with a single click when the note is locked."));
+                    p.Children.Add(SectionHeader("Opening & Selecting Links"));
+                    p.Children.Add(Body("\u2022 Click Link: Click on any link to view the popup card. Click the link address to launch the URL in your default browser, or click the copy icon to copy it."));
+                    p.Children.Add(Body("\u2022 Select & Edit: Link text is fully selectable and editable just like normal text. Click and drag to select, or edit as desired."));
+                    p.Children.Add(Body("\u2022 Quick Open (Ctrl+Click): Hold Ctrl and click any link to open it immediately."));
+                    p.Children.Add(Body("\u2022 Note Locked: Clicking any link directly opens it in your default browser."));
                     p.Children.Add(SectionHeader("Markdown Link Syntax"));
                     p.Children.Add(CodeRow("[Display Text](https://url.com)", "Custom text hyperlink"));
                     p.Children.Add(SectionHeader("Enable / Disable Hyperlinks"));
                     p.Children.Add(Body("Right-click any note \u2192 Format \u2192 toggle 'Hyperlinks' on or off. You can also click the link icon on the floating format toolbar to format or unlink selected text."));
-                    p.Children.Add(Tip("Hover over any link to preview the full destination address in a tooltip."));
+                    p.Children.Add(Tip("Click any link to reveal the popup card with the clickable URL and Copy button."));
                 }),
 
                 // -- Keyboard Shortcuts ---------------------------------------
