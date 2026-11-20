@@ -14,6 +14,7 @@ namespace DesktopNotes.Views
     {
         private readonly StartupService _startupService = new();
         private string _currentStoragePath = "";
+        public string RequestedStoragePath => _currentStoragePath;
 
         public SettingsWindow()
         {
@@ -125,7 +126,6 @@ namespace DesktopNotes.Views
             
             if (settings.CustomStoragePath != _currentStoragePath)
             {
-                settings.CustomStoragePath = _currentStoragePath;
                 storagePathChanged = true;
             }
 
@@ -190,16 +190,17 @@ namespace DesktopNotes.Views
             return new AppSettings();
         }
 
-        public void Save()
+        public bool Save()
         {
             try
             {
                 var dir = Path.GetDirectoryName(SettingsPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir!);
                 var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(SettingsPath, json);
+                DesktopNotes.Services.AtomicFile.WriteText(SettingsPath, json);
+                return true;
             }
-            catch { }
+            catch { return false; }
         }
     }
 }

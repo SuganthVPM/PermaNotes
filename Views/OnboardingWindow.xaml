@@ -57,6 +57,9 @@
 
                         <TextBlock Text="Locking Notes" FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF" />
                         <TextBlock Text="Lock a note to prevent accidental editing or deleting." Foreground="#AAAAAA" TextWrapping="Wrap" Margin="0,3,0,15"/>
+
+                        <TextBlock Text="Images &amp; Screenshots" FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF" />
+                        <TextBlock Text="Paste with Ctrl+V or drop an image into a note. Right-click for image options or double-click to view it full size." Foreground="#AAAAAA" TextWrapping="Wrap" Margin="0,3,0,15"/>
                     </StackPanel>
 
                     <StackPanel Grid.Column="2">

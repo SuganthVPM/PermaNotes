@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -120,6 +120,7 @@ namespace DesktopNotes.Views
                     ("fmt-bold-italic",     "Bold, Italic & Underline"),
                     ("fmt-highlight-strike","Highlight & Strikethrough"),
                     ("fmt-hyperlinks",      "Hyperlinks & URLs"),
+                    ("fmt-images",          "Images & Photos"),
                     ("fmt-lists",           "Lists & Checklists"),
                     ("fmt-divider",         "Horizontal Divider"),
                     ("fmt-toolbar",         "Floating Format Toolbar"),
@@ -640,6 +641,20 @@ namespace DesktopNotes.Views
                     p.Children.Add(SectionHeader("Enable / Disable Hyperlinks"));
                     p.Children.Add(Body("Right-click any note \u2192 Format \u2192 toggle 'Hyperlinks' on or off. You can also click the link icon on the floating format toolbar to format or unlink selected text."));
                     p.Children.Add(Tip("Click any link to reveal the popup card with the clickable URL and Copy button."));
+                }),
+
+                ["fmt-images"] = ("Images & Photos", "Text Formatting", p =>
+                {
+                    p.Children.Add(SectionHeader("Add an image"));
+                    p.Children.Add(Body("Copy an image or capture a screenshot with Win+Shift+S, then press Ctrl+V inside a note. You can also drop a PNG, JPEG, BMP, or GIF file from File Explorer."));
+                    p.Children.Add(Body("Image files can be up to 25 MiB and 40 megapixels. GIFs display their first frame."));
+                    p.Children.Add(SectionHeader("Resize and view"));
+                    p.Children.Add(Body("Images start at 30% of the note width and scale as you resize the note. Drag an image’s bottom-right grip to resize it, or right-click the image and choose 30%, 50%, 75%, or 100%."));
+                    p.Children.Add(Body("Double-click an image or choose the view icon from its right-click menu. In the viewer, drag the image to pan, use Ctrl+mouse wheel to zoom, or select Fit or 1:1."));
+                    p.Children.Add(SectionHeader("Copy, save, or remove"));
+                    p.Children.Add(Body("Right-click the image to copy it at full resolution, export it as PNG or JPEG, save the original image file, or remove it from the note. Use Ctrl+Z to undo a removal."));
+                    p.Children.Add(SectionHeader("Recover a missing image"));
+                    p.Children.Add(Body("Right-click the placeholder and choose Retry image if you restored the file. Choose Replace or relink image to select a replacement file."));
                 }),
 
                 // -- Keyboard Shortcuts ---------------------------------------

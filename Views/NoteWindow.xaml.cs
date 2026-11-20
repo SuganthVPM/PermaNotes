@@ -145,6 +145,14 @@ namespace DesktopNotes.Views
 
             LocationChanged += NoteWindow_LocationChanged;
             SizeChanged += NoteWindow_SizeChanged;
+            Deactivated += (s, e) =>
+            {
+                if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+                {
+                    ImageActionPopup.IsOpen = false;
+                    _activeImageControl = null;
+                }
+            };
 
             System.Windows.DataObject.AddPastingHandler(ContentRichTextBox, ContentRichTextBox_Pasting);
             ContentRichTextBox.AddHandler(UIElement.QueryCursorEvent, new System.Windows.Input.QueryCursorEventHandler(ContentRichTextBox_QueryCursor), true);
@@ -191,6 +199,10 @@ namespace DesktopNotes.Views
                 ContentRichTextBox.Document.Blocks.Add(new Paragraph(new Run(NoteModel.Text)));
             }
 
+            // Deserialize embedded images
+            RestoreReferencesWithoutDocument();
+            DeserializeImagesInDocument();
+
             SanitizeDocumentBackgrounds();
             ApplyBackgroundColor(NoteModel.BackgroundColor);
             UpdateLockUI();
@@ -200,6 +212,7 @@ namespace DesktopNotes.Views
             UpdateCaptureUI();
 
             _isInitializing = false;
+            InitializeImageEditing();
         }
 
         private void Window_StateChanged(object sender, EventArgs e)
@@ -393,6 +406,7 @@ namespace DesktopNotes.Views
         /// </summary>
         private void HighlightText_Click(object sender, RoutedEventArgs e)
         {
+            if (NoteModel.IsLocked || !FlushDocument()) return;
             if (ContentRichTextBox.Selection.IsEmpty) return;
 
             bool isHighlighted = IsSelectionHighlighted();
@@ -412,6 +426,7 @@ namespace DesktopNotes.Views
             
             // Re-trigger text changed to save the new RTF data
             ContentRichTextBox_TextChanged(this, null!);
+            FlushDocument();
         }
 
         /// <summary>
@@ -422,6 +437,7 @@ namespace DesktopNotes.Views
         /// </summary>
         private void StrikethroughText_Click(object sender, RoutedEventArgs e)
         {
+            if (NoteModel.IsLocked || !FlushDocument()) return;
             if (ContentRichTextBox.Selection.IsEmpty) return;
 
             var currentDecorations = ContentRichTextBox.Selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;
@@ -468,6 +484,7 @@ namespace DesktopNotes.Views
             }
 
             ContentRichTextBox_TextChanged(this, null!);
+            FlushDocument();
         }
 
         /// <summary>
@@ -476,10 +493,12 @@ namespace DesktopNotes.Views
         /// </summary>
         private void FontSizeMenu_Click(object sender, RoutedEventArgs e)
         {
+            if (NoteModel.IsLocked || !FlushDocument()) return;
             if (sender is MenuItem mi && int.TryParse(mi.Tag?.ToString(), out int size))
             {
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, (double)size);
                 ContentRichTextBox_TextChanged(this, null!);
+                FlushDocument();
             }
         }
 
@@ -490,12 +509,14 @@ namespace DesktopNotes.Views
         /// </summary>
         private void IncreaseFontSize_Click(object sender, RoutedEventArgs e)
         {
+            if (NoteModel.IsLocked || !FlushDocument()) return;
             if (ContentRichTextBox.Selection.IsEmpty) return;
             var currentSizeObj = ContentRichTextBox.Selection.GetPropertyValue(TextElement.FontSizeProperty);
             if (currentSizeObj is double currentSize)
             {
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, currentSize + 2);
                 ContentRichTextBox_TextChanged(this, null!);
+                FlushDocument();
             }
         }
 
@@ -505,12 +526,14 @@ namespace DesktopNotes.Views
         /// </summary>
         private void DecreaseFontSize_Click(object sender, RoutedEventArgs e)
         {
+            if (NoteModel.IsLocked || !FlushDocument()) return;
             if (ContentRichTextBox.Selection.IsEmpty) return;
             var currentSizeObj = ContentRichTextBox.Selection.GetPropertyValue(TextElement.FontSizeProperty);
             if (currentSizeObj is double currentSize && currentSize > 4)
             {
                 ContentRichTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, currentSize - 2);
                 ContentRichTextBox_TextChanged(this, null!);
+                FlushDocument();
             }
         }
 
@@ -520,7 +543,7 @@ namespace DesktopNotes.Views
         /// </summary>
         private void InsertTimestamp_Click(object sender, RoutedEventArgs e)
         {
-            if (NoteModel.IsLocked) return;
+            if (NoteModel.IsLocked || !FlushDocument()) return;
 
             var timeString = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
             if (!ContentRichTextBox.Selection.IsEmpty)
@@ -749,6 +772,62 @@ namespace DesktopNotes.Views
                 return;
             }
 
+            if (!FlushDocument()) { e.CancelCommand(); e.Handled = true; return; }
+
+            if (e.DataObject != null)
+            {
+                if (e.DataObject.GetDataPresent(ClipboardFormat) && e.DataObject.GetData(ClipboardFormat) is string payload)
+                {
+                    e.CancelCommand(); e.Handled = true; _ = PasteDocumentAsync(payload); return;
+                }
+                if (e.DataObject.GetDataPresent(System.Windows.DataFormats.Bitmap) ||
+                    e.DataObject.GetDataPresent("DeviceIndependentBitmap") ||
+                    System.Windows.Clipboard.ContainsImage())
+                {
+                    System.Windows.Media.Imaging.BitmapSource? bitmap = null;
+                    try
+                    {
+                        if (e.DataObject.GetDataPresent(typeof(System.Windows.Media.Imaging.BitmapSource)))
+                        {
+                            bitmap = e.DataObject.GetData(typeof(System.Windows.Media.Imaging.BitmapSource)) as System.Windows.Media.Imaging.BitmapSource;
+                        }
+                        if (bitmap == null && e.DataObject.GetDataPresent(System.Windows.DataFormats.Bitmap))
+                        {
+                            bitmap = e.DataObject.GetData(System.Windows.DataFormats.Bitmap) as System.Windows.Media.Imaging.BitmapSource;
+                        }
+                        if (bitmap == null && System.Windows.Clipboard.ContainsImage())
+                        {
+                            bitmap = System.Windows.Clipboard.GetImage();
+                        }
+                    }
+                    catch { }
+
+                    if (bitmap != null)
+                    {
+                        e.CancelCommand();
+                        e.Handled = true;
+                        InsertImageBitmap(bitmap);
+                        return;
+                    }
+                }
+
+                if (e.DataObject.GetDataPresent(System.Windows.DataFormats.FileDrop))
+                {
+                    var files = e.DataObject.GetData(System.Windows.DataFormats.FileDrop) as string[];
+                    if (files != null && files.Length > 0)
+                    {
+                        var imageFiles = files.Where(IsImageFile).ToList();
+                        if (imageFiles.Count > 0)
+                        {
+                            e.CancelCommand();
+                            e.Handled = true;
+                            _ = ImportImagesAsync(Array.Empty<System.Windows.Media.Imaging.BitmapSource>(), imageFiles);
+                            return;
+                        }
+                    }
+                }
+            }
+
             bool hyperlinksEnabled = AppSettings.Load().HyperlinksEnabled;
 
             if (hyperlinksEnabled && e.DataObject != null && e.DataObject.GetDataPresent(System.Windows.DataFormats.UnicodeText))
@@ -826,6 +905,11 @@ namespace DesktopNotes.Views
         private void ContentRichTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (HyperlinkActionPopup != null) HyperlinkActionPopup.IsOpen = false;
+            if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+            {
+                ImageActionPopup.IsOpen = false;
+                _activeImageControl = null;
+            }
 
             if (Keyboard.Modifiers == ModifierKeys.Control)
             {
@@ -1051,6 +1135,7 @@ namespace DesktopNotes.Views
 
         private void ContentRichTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            if (!_isInitializing && !_isSerializing && !FlushDocument()) { e.Handled = true; return; }
             var pos = e.GetPosition(ContentRichTextBox);
 
             // 1. In locked mode, clicking a hyperlink opens it directly in browser
@@ -1085,6 +1170,15 @@ namespace DesktopNotes.Views
                 HyperlinkActionPopup.IsOpen = false;
             }
 
+            if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+            {
+                if (!(e.OriginalSource is DependencyObject d && FindVisualParent<NoteImageControl>(d) != null))
+                {
+                    ImageActionPopup.IsOpen = false;
+                    _activeImageControl = null;
+                }
+            }
+
             // 4. Checkbox interactive toggle
             if (TryGetCheckboxAtPoint(pos, out var range, out char currentChar) && range != null)
             {
@@ -1101,14 +1195,8 @@ namespace DesktopNotes.Views
 
         private void TriggerNoteSave()
         {
-            var range = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
-            using var ms = new MemoryStream();
-            range.Save(ms, System.Windows.DataFormats.Rtf);
-            NoteModel.RtfText = System.Text.Encoding.UTF8.GetString(ms.ToArray());
-            NoteModel.Text = range.Text;
-            NoteModel.UpdatedAt = DateTime.Now;
-            NoteChanged?.Invoke(this, EventArgs.Empty);
-            ShowSavedIndicator();
+            ScheduleDocumentCapture();
+            FlushDocument();
         }
 
         private char GetCharFromPointer(TextPointer pointer, LogicalDirection dir)
@@ -1661,17 +1749,14 @@ namespace DesktopNotes.Views
             {
                 HyperlinkActionPopup.IsOpen = false;
             }
+            if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+            {
+                ImageActionPopup.IsOpen = false;
+            }
 
-            if (_isInitializing || NoteModel.IsLocked) return;
+            if (_isInitializing || _isSerializing || NoteModel.IsLocked) return;
 
-            // Generate RTF on the fly
-            var range = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
-            using var ms = new MemoryStream();
-            range.Save(ms, System.Windows.DataFormats.Rtf);
-            NoteModel.RtfText = System.Text.Encoding.UTF8.GetString(ms.ToArray());
-            NoteModel.Text = range.Text;
-            
-            NoteChanged?.Invoke(this, EventArgs.Empty);
+            ScheduleDocumentCapture();
         }
 
         /// <summary>
@@ -1688,6 +1773,17 @@ namespace DesktopNotes.Views
         /// </summary>
         private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
+            if (e.Key == Key.Escape)
+            {
+                if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+                {
+                    ImageActionPopup.IsOpen = false;
+                    _activeImageControl = null;
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 HighlightText_Click(sender, new RoutedEventArgs());
@@ -1715,7 +1811,7 @@ namespace DesktopNotes.Views
             }
         }
 
-        private async void ShowSavedIndicator(string text = "Saved")
+        private async void ShowSavedIndicator(string text = "Saving…")
         {
             SavedIndicator.Text = text;
             SavedIndicator.Opacity = 1;
@@ -1728,6 +1824,7 @@ namespace DesktopNotes.Views
 
         private void LockNoteButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!FlushDocument()) return;
             NoteModel.IsLocked = !NoteModel.IsLocked;
             UpdateLockUI();
             NoteModel.UpdatedAt = DateTime.Now;
@@ -1737,6 +1834,12 @@ namespace DesktopNotes.Views
 
         private void UpdateLockUI()
         {
+            if (ImageActionPopup != null) ImageActionPopup.IsOpen = false;
+            foreach (var image in DesktopNotes.Services.NoteDocumentCodec.Images(ContentRichTextBox.Document))
+            {
+                image.CanEdit = !NoteModel.IsLocked;
+                image.UpdateResponsiveWidth(EditorWidth);
+            }
             if (NoteModel.IsLocked)
             {
                 // Show locked Padlock (Solid with keyhole)
@@ -1789,8 +1892,7 @@ namespace DesktopNotes.Views
             {
                 try
                 {
-                    var textRange = new TextRange(ContentRichTextBox.Document.ContentStart, ContentRichTextBox.Document.ContentEnd);
-                    File.WriteAllText(sfd.FileName, textRange.Text);
+                    File.WriteAllText(sfd.FileName, _documentCodec.Capture(ContentRichTextBox.Document).Text);
                 }
                 catch (Exception ex)
                 {
@@ -1830,11 +1932,12 @@ namespace DesktopNotes.Views
 
         private void DuplicateNote_Click(object sender, RoutedEventArgs e)
         {
+            if (!FlushDocument()) return;
             var clone = new Note
             {
                 Title = NoteModel.Title + " (copy)",
                 Text = NoteModel.Text,
-                RtfText = NoteModel.RtfText,
+                RtfText = _documentCodec.DuplicateRtf(NoteModel.RtfText),
                 X = Left + 30,
                 Y = Top + 30,
                 Width = Width,
@@ -1843,6 +1946,14 @@ namespace DesktopNotes.Views
                 Opacity = NoteModel.Opacity,
                 IsAlwaysOnTop = NoteModel.IsAlwaysOnTop
             };
+
+            if (NoteModel.Images.Count > 0)
+            {
+                try { Assets.CopyReferenced(NoteModel.Id, clone.Id, NoteModel.Images); }
+                catch (Exception ex) { System.Windows.MessageBox.Show(this, ex.Message, "Could not duplicate note"); return; }
+                clone.Images = new List<string>(NoteModel.Images);
+            }
+
             RequestDuplicateNote?.Invoke(this, clone);
         }
 
@@ -1875,11 +1986,21 @@ namespace DesktopNotes.Views
 
         private void NoteWindow_LocationChanged(object? sender, EventArgs e)
         {
+            if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+            {
+                ImageActionPopup.IsOpen = false;
+                _activeImageControl = null;
+            }
             UpdatePinWindowPosition();
         }
 
         private void NoteWindow_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            if (ImageActionPopup != null && ImageActionPopup.IsOpen)
+            {
+                ImageActionPopup.IsOpen = false;
+                _activeImageControl = null;
+            }
             UpdatePinWindowPosition();
         }
 
@@ -2165,6 +2286,7 @@ namespace DesktopNotes.Views
 
         private void ToggleSelectionHyperlink()
         {
+            if (NoteModel.IsLocked || !FlushDocument()) return;
             if (ContentRichTextBox.Selection.IsEmpty) return;
 
             _isFormatting = true;

@@ -46,7 +46,7 @@ namespace DesktopNotes.Views
                     {
                         NoteModel = note,
                         Title = title,
-                        Snippet = text.Replace("\r", " ").Replace("\n", " ")
+                        Snippet = text[..Math.Min(240, text.Length)].Replace("\r", " ").Replace("\n", " ")
                     });
                 }
             }

@@ -1,0 +1,217 @@
+<Window x:Class="DesktopNotes.Views.ImageViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Image Viewer - PermaNotes"
+        Width="820" Height="620"
+        MinWidth="500" MinHeight="300"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        KeyDown="Window_KeyDown"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Window.Resources>
+        <!-- Arrow-free bars retain a comfortable hit area around the slim thumb. -->
+        <Style x:Key="ViewerScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Grid Background="Transparent">
+                            <Border x:Name="Grip" Width="4" Margin="0,4" CornerRadius="2"
+                                    HorizontalAlignment="Center" Background="#66FFFFFF"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Orientation, RelativeSource={RelativeSource AncestorType=ScrollBar}}" Value="Horizontal">
+                                <Setter TargetName="Grip" Property="Width" Value="Auto"/>
+                                <Setter TargetName="Grip" Property="Height" Value="4"/>
+                                <Setter TargetName="Grip" Property="Margin" Value="4,0"/>
+                                <Setter TargetName="Grip" Property="HorizontalAlignment" Value="Stretch"/>
+                                <Setter TargetName="Grip" Property="VerticalAlignment" Value="Center"/>
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Grip" Property="Background" Value="#BFFFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Grip" Property="Background" Value="#EEEEEE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ViewerScrollPageStyle" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ViewerScrollBarStyle" TargetType="ScrollBar">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Background" Value="#111111"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}"
+                                   Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                                   Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}"
+                                   IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton x:Name="PageBefore" Style="{StaticResource ViewerScrollPageStyle}" Command="ScrollBar.PageUpCommand"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb><Thumb x:Name="ScrollThumb" MinHeight="24" Style="{StaticResource ViewerScrollThumbStyle}"/></Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton x:Name="PageAfter" Style="{StaticResource ViewerScrollPageStyle}" Command="ScrollBar.PageDownCommand"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+                                <Setter TargetName="ScrollThumb" Property="MinHeight" Value="0"/>
+                                <Setter TargetName="ScrollThumb" Property="MinWidth" Value="24"/>
+                                <Setter TargetName="PageBefore" Property="Command" Value="{x:Static ScrollBar.PageLeftCommand}"/>
+                                <Setter TargetName="PageAfter" Property="Command" Value="{x:Static ScrollBar.PageRightCommand}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Width" Value="Auto"/>
+                    <Setter Property="Height" Value="10"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ViewerToolbarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#22FFFFFF"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="btnBorder" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="btnBorder" Property="Background" Value="#44FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="btnBorder" Property="Background" Value="#66FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#111111" CornerRadius="10" BorderBrush="#444444" BorderThickness="1">
+        <Grid SizeChanged="ViewerSurface_SizeChanged">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="44"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header Bar -->
+            <Grid Grid.Row="0" Background="#1E1E1E" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Text="🖼️" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock x:Name="TitleTextBlock" Text="Image Viewer" FontWeight="SemiBold" FontSize="12" Foreground="#EEEEEE" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ResolutionTextBlock" Text="" FontSize="11" Foreground="#888888" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+
+                <!-- Close Button -->
+                <Button HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Width="26" Height="26"
+                        Style="{StaticResource ViewerToolbarButtonStyle}" Click="CloseButton_Click" ToolTip="Close (Esc)">
+                    <TextBlock Text="✕" FontSize="12" Foreground="#CCCCCC"/>
+                </Button>
+            </Grid>
+
+            <!-- Image Viewport -->
+            <ScrollViewer Grid.Row="1" x:Name="ImageScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                          PreviewMouseWheel="ScrollViewer_PreviewMouseWheel" Background="#111111">
+                <ScrollViewer.Template>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                    Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Orientation="Vertical" Style="{StaticResource ViewerScrollBarStyle}"
+                                       Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                            <ScrollBar x:Name="PART_HorizontalScrollBar" Grid.Row="1" Orientation="Horizontal" Style="{StaticResource ViewerScrollBarStyle}"
+                                       Maximum="{TemplateBinding ScrollableWidth}" ViewportSize="{TemplateBinding ViewportWidth}"
+                                       Value="{Binding HorizontalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                            <Border Grid.Row="1" Grid.Column="1" Background="{TemplateBinding Background}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </ScrollViewer.Template>
+                <Grid x:Name="ImageContainer" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Image x:Name="ViewerImage" Stretch="None" RenderOptions.BitmapScalingMode="HighQuality">
+                        <Image.LayoutTransform>
+                            <ScaleTransform x:Name="ImageScaleTransform" ScaleX="1.0" ScaleY="1.0"/>
+                        </Image.LayoutTransform>
+                    </Image>
+                </Grid>
+            </ScrollViewer>
+
+            <!-- Footer Toolbar -->
+            <Border Grid.Row="2" Background="#1E1E1E" BorderThickness="0,1,0,0" BorderBrush="#333333" Padding="12,4">
+                <Grid>
+                    <!-- Zoom Controls -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Button Style="{StaticResource ViewerToolbarButtonStyle}" Click="ZoomOut_Click" ToolTip="Zoom Out (Ctrl+Minus)">
+                            <TextBlock Text="−" FontSize="14" FontWeight="Bold"/>
+                        </Button>
+                        <TextBlock x:Name="ZoomPercentText" Text="100%" Foreground="#CCCCCC" FontSize="11" VerticalAlignment="Center" Margin="6,0,6,0" Width="40" TextAlignment="Center"/>
+                        <Button Style="{StaticResource ViewerToolbarButtonStyle}" Click="ZoomIn_Click" ToolTip="Zoom In (Ctrl+Plus)">
+                            <TextBlock Text="+" FontSize="14" FontWeight="Bold"/>
+                        </Button>
+                        <Button Style="{StaticResource ViewerToolbarButtonStyle}" Click="FitToScreen_Click" ToolTip="Fit to Window">
+                            <TextBlock Text="Fit" FontSize="11"/>
+                        </Button>
+                        <Button Style="{StaticResource ViewerToolbarButtonStyle}" Click="ActualSize_Click" ToolTip="100% Actual Size">
+                            <TextBlock Text="1:1" FontSize="11"/>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Action Controls -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button x:Name="CopyBtn" Style="{StaticResource ViewerToolbarButtonStyle}" Click="Copy_Click" ToolTip="Copy Image (Ctrl+C)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📋" FontSize="11" Margin="0,0,4,0"/>
+                                <TextBlock Text="Copy" FontSize="11"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ViewerToolbarButtonStyle}" Click="SaveAs_Click" ToolTip="Save As... (Ctrl+S)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💾" FontSize="11" Margin="0,0,4,0"/>
+                                <TextBlock Text="Save As" FontSize="11"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

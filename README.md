@@ -7,6 +7,13 @@ A lightweight, always-on-desktop sticky note app for Windows. Notes behave like 
 PermaNotes pins rich-text sticky notes directly to your Windows desktop layer, so they're always visible (even alongside your icons, shown on Win+D) but never in the way of your open windows. Built in WPF on .NET 8, fully local — no accounts, no cloud sync, no telemetry.
 
 ## Features
+
+Unreleased image support includes clipboard and file imports,
+responsive thumbnails, resize presets, a zoom/pan viewer, original-byte export,
+PNG/JPEG conversion, missing-image recovery, and unified text/image Undo/Redo.
+See [implementation and verification](docs/image-support-implementation.md) for
+storage compatibility, memory measurements, and remaining release checks.
+
 - **Always-on-Desktop**: Notes sit above wallpaper icons but below active application windows (survives Win+D).
 - **Live Markdown & Rich Text**: Rich text editing with instant markdown expansions (`#`, `---`, `**bold**`, `==highlight==`, `-->`).
 - **Interactive Checklists**: Clickable task lists (`☐` / `☑`) with single-click toggling and smart keyboard triggers (`[] `).
@@ -159,6 +166,17 @@ Or use the user-local dotnet if already installed:
 ```powershell
 dotnet run
 ```
+
+To test with separate development notes/settings and force the welcome tour,
+exit any existing development instance from its tray menu, then run:
+
+```powershell
+& "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" run --project .\DesktopNotes.csproj -c Debug -p:DefineConstants=DEV -- --tour
+```
+
+The welcome note is created when storage is empty. The welcome tour normally
+appears only for a first launch or a newer app version; `--tour` opens it again
+without resetting notes or settings.
 
 ### Publish standalone executable
 ```powershell
