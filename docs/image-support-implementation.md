@@ -22,10 +22,12 @@ replaced, or used as test fixtures.
 - Legacy image markers and decimal-comma ratios remain readable. Legacy short-ID
   asset directories are read through without destructive conversion. New assets
   use full IDs; old assets are not re-encoded just to change their folder layout.
-- Shared 16 MiB lazy thumbnail LRU and one heavy import/decode worker. Thumbnails
-  decode near rendered pixel size, accounting for DPI, with 64-pixel size buckets.
-  Hiding/unloading an image control releases its active bitmap reference. Cached
-  thumbnails may remain within budget. Full viewer decoding happens on demand.
+- Shared 2 MiB lazy thumbnail LRU and one heavy import/decode worker. Small note
+  thumbnails decode at roughly 80% of rendered pixel width, accounting for DPI.
+  Note previews are capped at 512 pixels wide and 1024 pixels on either edge.
+  The viewer starts with a preview and uses original pixels for high zoom, copy,
+  and export. Fit releases the original bitmap if it was loaded. Hide All releases
+  the note windows and clears the cache while preserving Undo history in memory.
 - One history for typing, formatting, images, resize, cut, paste and deletion.
   Native WPF undo does not record child image property changes, as verified by
   the feasibility check. Session history uses detached document snapshots with

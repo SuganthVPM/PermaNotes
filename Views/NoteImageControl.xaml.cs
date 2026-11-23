@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using DesktopNotes.Models;
 using DesktopNotes.Services;
 using UserControl = System.Windows.Controls.UserControl;
@@ -24,20 +25,56 @@ public partial class NoteImageControl : UserControl
     public event EventHandler? Resized;
     private CancellationTokenSource? _decode;
     private int _requestedWidth;
+    private bool _deferThumbnailRefresh;
+    private readonly DispatcherTimer _thumbnailRelease;
 
     public NoteImageControl()
     {
         InitializeComponent();
-        Loaded += (_, _) => RefreshThumbnail();
+        // FlowDocument can briefly detach inline images when its lines reflow.
+        // Keep the current bitmap through that transition, but release hidden notes' thumbnails.
+        _thumbnailRelease = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(300)
+        };
+        _thumbnailRelease.Tick += (_, _) =>
+        {
+            _thumbnailRelease.Stop();
+            if (_deferThumbnailRefresh || (IsLoaded && IsVisible)) return;
+            ReleaseThumbnail();
+        };
+        Loaded += (_, _) => ResumeThumbnail();
         IsVisibleChanged += (_, _) =>
         {
-            if (IsVisible) RefreshThumbnail();
-            else { _decode?.Cancel(); DisplayImage.Source = null; _requestedWidth = 0; }
+            if (IsLoaded && IsVisible) ResumeThumbnail();
+            else ScheduleThumbnailRelease();
         };
-        Unloaded += (_, _) => { _decode?.Cancel(); DisplayImage.Source = null; _requestedWidth = 0; };
+        Unloaded += (_, _) => ScheduleThumbnailRelease();
         ResizeThumb.DragStarted += (_, _) => { if (CanEdit) ResizeStarted?.Invoke(this, EventArgs.Empty); };
         System.Windows.Automation.AutomationProperties.SetName(this, "Note image. Double-click to view or right-click for image actions.");
     }
+
+    internal void ReleaseThumbnail()
+    {
+        _thumbnailRelease.Stop();
+        _decode?.Cancel();
+        DisplayImage.Source = null;
+        _requestedWidth = 0;
+    }
+
+    private void ResumeThumbnail()
+    {
+        if (!IsVisible) return;
+        _thumbnailRelease.Stop();
+        if (!_deferThumbnailRefresh || DisplayImage.Source == null) RefreshThumbnail();
+    }
+
+    private void ScheduleThumbnailRelease()
+    {
+        _thumbnailRelease.Stop();
+        _thumbnailRelease.Start();
+    }
+
     public void LoadReference(string path, NoteImageReference reference, double viewportWidth)
     {
         _decode?.Cancel();
@@ -47,12 +84,16 @@ public partial class NoteImageControl : UserControl
         ToolTip = System.IO.File.Exists(path) ? "Double-click to view. Right-click for image actions." : "Image unavailable. Right-click to retry or relink.";
         UpdateResponsiveWidth(viewportWidth);
     }
-    public void UpdateResponsiveWidth(double viewportWidth)
+    public void UpdateResponsiveWidth(double viewportWidth, bool refreshThumbnail = true)
     {
         if (viewportWidth <= 0) return;
+        bool wasDeferred = _deferThumbnailRefresh;
+        _deferThumbnailRefresh = !refreshThumbnail;
         Width = Math.Clamp(viewportWidth * WidthRatio, Math.Min(70, viewportWidth), Math.Max(70, viewportWidth - 32));
         ResizeThumb.Visibility = CanEdit ? Visibility.Visible : Visibility.Collapsed;
-        if (IsLoaded) RefreshThumbnail();
+        if (!refreshThumbnail) return;
+        if (IsLoaded && IsVisible) ResumeThumbnail();
+        else if (wasDeferred) ScheduleThumbnailRelease();
     }
     public void SetWidthRatio(double ratio, double viewportWidth)
     {
@@ -72,9 +113,10 @@ public partial class NoteImageControl : UserControl
             return;
         }
         double dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
-        int pixels = Math.Clamp((int)Math.Ceiling((double.IsNaN(Width) ? 100 : Width) * dpi / 64) * 64, 64, 2048);
-        if (pixels == _requestedWidth && DisplayImage.Source != null) return;
-        _decode?.Cancel(); _decode?.Dispose();
+        int pixels = ImageDecodeService.NotePreviewWidth((double.IsNaN(Width) ? 100 : Width) * dpi);
+        if (pixels == _requestedWidth &&
+            (_decode is { IsCancellationRequested: false } || DisplayImage.Source != null)) return;
+        _decode?.Cancel();
         var request = _decode = new CancellationTokenSource(); _requestedWidth = pixels;
         try
         {
@@ -85,7 +127,19 @@ public partial class NoteImageControl : UserControl
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
-        { if (!request.IsCancellationRequested) { MissingLabel.Visibility = Visibility.Visible; ToolTip = "Image unavailable: " + ex.Message; } }
+        {
+            if (!request.IsCancellationRequested)
+            {
+                _requestedWidth = 0;
+                if (DisplayImage.Source == null) MissingLabel.Visibility = Visibility.Visible;
+                ToolTip = "Image unavailable: " + ex.Message;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_decode, request)) _decode = null;
+            request.Dispose();
+        }
     }
     private void ResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
     {

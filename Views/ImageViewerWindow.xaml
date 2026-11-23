@@ -10,8 +10,7 @@
         Background="Transparent"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
-        KeyDown="Window_KeyDown"
-        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+        KeyDown="Window_KeyDown">
 
     <Window.Resources>
         <!-- Arrow-free bars retain a comfortable hit area around the slim thumb. -->
@@ -167,7 +166,7 @@
                     </ControlTemplate>
                 </ScrollViewer.Template>
                 <Grid x:Name="ImageContainer" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Image x:Name="ViewerImage" Stretch="None" RenderOptions.BitmapScalingMode="HighQuality">
+                    <Image x:Name="ViewerImage" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality">
                         <Image.LayoutTransform>
                             <ScaleTransform x:Name="ImageScaleTransform" ScaleX="1.0" ScaleY="1.0"/>
                         </Image.LayoutTransform>

@@ -1,28 +1,23 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 
 namespace DesktopNotes.Views
 {
     public enum OnboardingMode
     {
         FirstTime,
-        Update,
-        Help
+        Update
     }
 
     public partial class OnboardingWindow : Window
     {
         private int _currentPage = 1;
-        private readonly OnboardingMode _mode;
 
         public OnboardingWindow(OnboardingMode mode = OnboardingMode.FirstTime)
         {
             InitializeComponent();
-            _mode = mode;
-
-            if (_mode == OnboardingMode.Update)
+            if (mode == OnboardingMode.Update)
             {
                 Title = "PermaNotes Update";
                 // Optionally change text on Page1 for updates

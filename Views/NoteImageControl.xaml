@@ -17,16 +17,13 @@
     </UserControl.Resources>
 
     <Grid x:Name="RootGrid" Cursor="Hand" MouseLeftButtonDown="RootGrid_MouseLeftButtonDown" MouseEnter="RootGrid_MouseEnter" MouseLeave="RootGrid_MouseLeave">
-        <Border x:Name="ImageBorder" CornerRadius="6" BorderThickness="1" BorderBrush="#33000000" Background="#0A000000" ClipToBounds="True">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="6" ShadowDepth="2" Opacity="0.25" Direction="270"/>
-            </Border.Effect>
+        <Border x:Name="ImageBorder" BorderThickness="1" BorderBrush="#33000000" Background="#0A000000" ClipToBounds="True">
             <Image x:Name="DisplayImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
         </Border>
         <TextBlock x:Name="MissingLabel" Text="Image unavailable" Foreground="Gray" FontStyle="Italic" TextWrapping="Wrap" Margin="6" MinHeight="32" Visibility="Collapsed"/>
 
         <!-- Hover outline indicator -->
-        <Border x:Name="HoverBorder" CornerRadius="6" BorderThickness="1.5" BorderBrush="#007ACC" Visibility="Collapsed" IsHitTestVisible="False"/>
+        <Border x:Name="HoverBorder" BorderThickness="1.5" BorderBrush="#007ACC" Visibility="Collapsed" IsHitTestVisible="False"/>
 
         <!-- Bottom-Right Resize Handle -->
         <Thumb x:Name="ResizeThumb" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE"

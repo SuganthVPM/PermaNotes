@@ -1,7 +1,5 @@
 using System;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -33,11 +31,7 @@ namespace DesktopNotes.Views
 
             var settings = AppSettings.Load();
             
-            _currentStoragePath = settings.CustomStoragePath;
-            if (string.IsNullOrWhiteSpace(_currentStoragePath))
-            {
-                _currentStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PermaNotes");
-            }
+            _currentStoragePath = NoteStorageService.GetEffectiveStoragePath();
             StoragePathText.Text = _currentStoragePath;
 
             ConfirmDeleteCheckBox.IsChecked = settings.ConfirmBeforeDelete;
@@ -122,26 +116,22 @@ namespace DesktopNotes.Views
 
             // Save app settings
             var settings = AppSettings.Load();
-            bool storagePathChanged = false;
-            
-            if (settings.CustomStoragePath != _currentStoragePath)
-            {
-                storagePathChanged = true;
-            }
+            bool storagePathChanged = !string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(_currentStoragePath)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(NoteStorageService.GetEffectiveStoragePath())),
+                StringComparison.OrdinalIgnoreCase);
 
             settings.ConfirmBeforeDelete = ConfirmDeleteCheckBox.IsChecked == true;
             settings.DefaultOpacity = OpacitySlider.Value;
             settings.DefaultNoteColor = (DefaultColorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "#FFF9C4";
             
-            settings.Save();
-
-            if (storagePathChanged)
+            if (!settings.Save())
             {
-                // App.xaml.cs will handle the reload
-                DialogResult = true; 
+                System.Windows.MessageBox.Show(this, "PermaNotes could not save your settings.", "Settings");
+                return;
             }
 
-            Close();
+            DialogResult = storagePathChanged;
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)

@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using DesktopNotes.Models;
+using DesktopNotes.Services;
 
 namespace DesktopNotes.Views
 {
@@ -96,8 +97,9 @@ namespace DesktopNotes.Views
         /// Initializes a new <see cref="NoteWindow"/> for the given <paramref name="note"/>.
         /// UI data-binding and color/lock state are applied in <see cref="Window_Loaded"/>.
         /// </summary>
-        public NoteWindow(Note note)
+        public NoteWindow(Note note, NoteEditorHistory? history = null)
         {
+            _history = history ?? new NoteEditorHistory();
             InitializeComponent();
             NoteModel = note;
         }
@@ -2849,11 +2851,13 @@ namespace DesktopNotes.Views
         {
             if (NoteModel.IsLocked) return;
             _isResizing = true;
+            UpdateImageWidths(refreshThumbnails: false);
         }
 
         private void ResizeThumb_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             _isResizing = false;
+            UpdateImageWidths(refreshThumbnails: true);
             UpdatePositionAndSize();
         }
 

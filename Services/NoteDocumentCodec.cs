@@ -123,32 +123,42 @@ public sealed class NoteDocumentCodec
     public void RestoreImages(FlowDocument document, Func<NoteImageReference, NoteImageControl> createImage,
         TextPointer? limitStart = null, TextPointer? limitEnd = null)
     {
-        // Build text-to-pointer maps, so markers split across formatted RTF runs also work.
+        // Track text runs rather than allocating a WPF TextPointer for every character.
+        // Markers can span multiple runs, so keep their offsets in the combined paragraph.
         foreach (var paragraph in Paragraphs(document.Blocks).ToArray())
         {
             var text = new StringBuilder();
-            var positions = new List<TextPointer>();
+            var runs = new List<(int Start, TextPointer Pointer)>();
             var cursor = paragraph.ContentStart;
             while (cursor != null && cursor.CompareTo(paragraph.ContentEnd) < 0)
             {
                 if (cursor.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
                 {
                     string run = cursor.GetTextInRun(LogicalDirection.Forward);
-                    for (int i = 0; i < run.Length; i++) positions.Add(cursor.GetPositionAtOffset(i)!);
+                    runs.Add((text.Length, cursor));
                     text.Append(run);
                     cursor = cursor.GetPositionAtOffset(run.Length);
                 }
                 else
                 {
                     if (cursor.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.EmbeddedElement)
-                    { text.Append('\uFFFC'); positions.Add(cursor); }
+                        text.Append('\uFFFC');
                     cursor = cursor.GetNextContextPosition(LogicalDirection.Forward);
                 }
             }
+            if (runs.Count == 0) continue;
+            int runIndex = runs.Count - 1;
+            TextPointer PointerAt(int offset)
+            {
+                while (runs[runIndex].Start > offset) runIndex--;
+                var run = runs[runIndex];
+                return run.Pointer.GetPositionAtOffset(offset - run.Start)!;
+            }
+
             foreach (Match match in AllMarkers.Matches(text.ToString()).Cast<Match>().Reverse())
             {
-                var start = positions[match.Index];
-                var end = positions[match.Index + match.Length - 1].GetPositionAtOffset(1)!;
+                var end = PointerAt(match.Index + match.Length - 1).GetPositionAtOffset(1)!;
+                var start = PointerAt(match.Index);
                 if (limitStart != null && start.CompareTo(limitStart) < 0 || limitEnd != null && end.CompareTo(limitEnd) > 0) continue;
                 if (match.Groups["literal"].Success)
                 {

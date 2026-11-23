@@ -17,11 +17,14 @@ internal static class Program
     private static int Main(string[] args)
     {
         Directory.CreateDirectory(Root);
+        if (args.Length == 1 && args[0] == "--memory-notes") { BenchmarkNotes(); return 0; }
+        if (args.Length == 1 && args[0] == "--memory-breakdown") { BenchmarkMemoryBreakdown(); return 0; }
+        if (args.Length == 3 && args[0] == "--memory-stage") { MeasureMemoryStage(args[1], args[2]); return 0; }
         if (args.Length == 1 && args[0] == "--preview") { RenderPreview(); return 0; }
         if (args.Length == 2 && args[0].StartsWith("--memory-", StringComparison.Ordinal)) return MemoryBenchmark(args[0] == "--memory-full", args[1]);
         try
         {
-            TokenTests(); CodecTests(); AssetTests(); StorageTests(); HistoryTests(); MigrationTests(); CollectionTests(); SessionTests(); RenderPreview(); MemoryComparisons();
+            TokenTests(); CodecTests(); AssetTests(); StorageTests(); HistoryTests(); MigrationTests(); CollectionTests(); SessionTests(); ThumbnailLifetimeTest(); RenderPreview(); MemoryComparisons();
             Console.WriteLine($"PASS: {_checks} checks. Isolated fixtures: {Root}");
             return 0;
         }
@@ -111,6 +114,15 @@ internal static class Program
         Check(File.Exists(path), "Image file committed before document reference");
         var thumbnail = ImageDecodeService.Decode(path, 300);
         Check(thumbnail.PixelWidth == 300 && thumbnail.PixelHeight == 225, "Display-size decode uses 300 x 225 pixels");
+        int smallWidth = ImageDecodeService.NotePreviewWidth(100);
+        var smallPreview = ImageDecodeService.Decode(path, smallWidth);
+        Check(smallPreview.PixelWidth == 80 && smallPreview.PixelHeight == 60, "Small previews use a lower-resolution bitmap");
+        Check(ImageDecodeService.NotePreviewWidth(900) == 512, "Large note previews cap their decode width");
+        ViewerPreviewTest(path);
+        var portrait = store.Import(noteId, Bitmap(180, 2400));
+        var portraitThumbnail = ImageDecodeService.Decode(store.Resolve(noteId, portrait.FileName), 300);
+        Check(portraitThumbnail.PixelHeight == ImageDecodeService.MaxThumbnailEdge && portraitThumbnail.PixelWidth < 180,
+            "Tall thumbnails cap their longest edge without stretching");
         var clone = Guid.NewGuid(); store.CopyReferenced(noteId, clone, new[] { reference.FileName });
         Check(File.Exists(store.Resolve(clone, reference.FileName)), "Duplicate copies referenced assets");
         string jpeg = Path.Combine(Root, "export.jpg"); ImageExportService.Export(path, jpeg);
@@ -282,8 +294,243 @@ internal static class Program
         Check(pasted.Reference.OccurrenceId != asset.OccurrenceId && File.Exists(pasted.FullPath), "Cross-note paste owns its asset and occurrence identity");
         window.NoteModel.IsLocked = true;
         Check(!System.Windows.Input.ApplicationCommands.Undo.CanExecute(null, editor), "Locked editor rejects Undo mutation");
+        window.NoteModel.IsLocked = false;
+        var history = Suspend(window);
+        Check(history.CanUndo, "Suspending a note releases its window without discarding Undo");
+        var resumed = new NoteWindow(window.NoteModel, history);
+        var resumedEditor = (System.Windows.Controls.RichTextBox)resumed.FindName("ContentRichTextBox");
+        resumedEditor.Document = new NoteDocumentCodec().Load(window.NoteModel.RtfText, Image);
+        typeof(NoteWindow).GetField("_isInitializing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(resumed, false);
+        typeof(NoteWindow).GetMethod("InitializeImageEditing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(resumed, null);
+        System.Windows.Input.ApplicationCommands.Undo.Execute(null, resumedEditor);
+        Check(NoteDocumentCodec.Images(resumedEditor.Document).Count() == 1, "Reopening a suspended note can undo the previous edit");
+        resumed.Close();
+    }
+
+    private static NoteEditorHistory Suspend(NoteWindow window) =>
+        (NoteEditorHistory)typeof(NoteWindow).GetMethod("SuspendForHide", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(window, null)!;
+    private static void ViewerPreviewTest(string path)
+    {
+        static void WaitFor(Func<bool> ready)
+        {
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            var deadline = Stopwatch.StartNew();
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(15) };
+            timer.Tick += (_, _) =>
+            {
+                if (!ready() && deadline.Elapsed < TimeSpan.FromSeconds(5)) return;
+                timer.Stop();
+                frame.Continue = false;
+            };
+            timer.Start();
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+        }
+
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
+        try
+        {
+            var viewer = new ImageViewerWindow(path);
+            try
+            {
+                var image = (System.Windows.Controls.Image)viewer.FindName("ViewerImage");
+                WaitFor(() => image.Source != null);
+                var preview = image.Source as BitmapSource;
+                double originalWidth = image.Width;
+                Check(preview?.PixelWidth == 1024 && originalWidth > preview.Width, "Viewer starts with a bounded preview and keeps original layout size");
+                typeof(ImageViewerWindow).GetMethod("ApplyZoom", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(viewer, new object[] { 1.0 });
+                WaitFor(() => image.Source is BitmapSource { PixelWidth: 1200 });
+                Check(image.Source is BitmapSource { PixelWidth: 1200 } && image.Width == originalWidth,
+                    "Actual-size zoom loads original detail without changing image layout");
+                typeof(ImageViewerWindow).GetMethod("FitToScreen", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(viewer, null);
+                Check(ReferenceEquals(image.Source, preview), "Fit releases the viewer's original-resolution bitmap");
+            }
+            finally { viewer.Close(); }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+    }
+
+    private static void ThumbnailLifetimeTest()
+    {
+        var control = Image(new("resize.png", .3, Guid.NewGuid()));
+        var display = (System.Windows.Controls.Image)control.FindName("DisplayImage");
+        var bitmap = Bitmap(80, 60);
+        display.Source = bitmap;
+        control.UpdateResponsiveWidth(500, refreshThumbnail: false);
+        control.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+        Check(ReferenceEquals(display.Source, bitmap), "Inline image keeps its thumbnail when detached during resize");
+
+        control.UpdateResponsiveWidth(500);
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.ApplicationIdle)
+        {
+            Interval = TimeSpan.FromMilliseconds(400)
+        };
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Start();
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+        Check(display.Source == null, "A thumbnail still detached after resize is released");
+    }
+
+    private static void BenchmarkMemoryBreakdown()
+    {
+        string path = BenchmarkImage();
+        foreach (string stage in new[] { "wpf", "transparent", "editor", "note", "image", "decode-full", "viewer-fit", "viewer-zoom-preview", "viewer-full" })
+        {
+            var start = new ProcessStartInfo(Environment.ProcessPath!)
+            {
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true
+            };
+            start.ArgumentList.Add("--memory-stage");
+            start.ArgumentList.Add(stage);
+            start.ArgumentList.Add(path);
+            using var process = Process.Start(start)!;
+            Console.WriteLine(process.StandardOutput.ReadToEnd().Trim());
+            process.WaitForExit();
+            if (process.ExitCode != 0) throw new InvalidOperationException($"Memory stage {stage} failed.");
+        }
+    }
+
+    private static void MeasureMemoryStage(string stage, string imagePath)
+    {
+        const double MiB = 1024 * 1024;
+        using var process = Process.GetCurrentProcess();
+        process.Refresh();
+        long baseline = process.PrivateMemorySize64;
+        if (stage == "decode-full")
+        {
+            var bitmap = ImageDecodeService.Decode(imagePath);
+            process.Refresh();
+            Console.WriteLine($"decode-full: baseline {baseline / MiB:F1}, private {process.PrivateMemorySize64 / MiB:F1}, " +
+                $"working {process.WorkingSet64 / MiB:F1}, managed {GC.GetTotalMemory(false) / MiB:F1} MiB, decoded width {bitmap.PixelWidth}");
+            GC.KeepAlive(bitmap);
+            return;
+        }
+        SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
+        int pixelWidth = 0;
+        Window window;
+        if (stage is "wpf" or "transparent" or "editor")
+        {
+            window = new Window { Width = 900, Height = 620 };
+            if (stage is "transparent" or "editor")
+            {
+                window.WindowStyle = WindowStyle.None;
+                window.AllowsTransparency = true;
+                window.Background = Brushes.Transparent;
+                window.Content = new System.Windows.Controls.Border { Background = Brushes.LightYellow };
+            }
+            if (stage == "editor")
+                window.Content = new System.Windows.Controls.RichTextBox(new FlowDocument(new Paragraph(new Run("A sample note."))));
+        }
+        else if (stage.StartsWith("viewer-", StringComparison.Ordinal))
+        {
+            window = new ImageViewerWindow(imagePath);
+        }
+        else
+        {
+            var note = new Note { Title = "Memory breakdown", Text = "A sample note.", Width = 900, Height = 620, X = -10000, Y = -10000 };
+            if (stage == "image")
+            {
+                using var storage = new NoteStorageService(Path.Combine(Root, "memory-stage"));
+                var assets = new ImageAssetStore(NoteStorageService.GetEffectiveStoragePath());
+                string folder = assets.DirectoryFor(note.Id);
+                Directory.CreateDirectory(folder);
+                string fileName = Path.GetFileName(imagePath);
+                File.Copy(imagePath, Path.Combine(folder, fileName));
+                var image = Image(new(fileName, 1, Guid.NewGuid()));
+                note.RtfText = new NoteDocumentCodec().Capture(new FlowDocument(new Paragraph(new InlineUIContainer(image)))).Rtf;
+            }
+            window = new NoteWindow(note);
+        }
+
+        window.Left = -10000;
+        window.Top = -10000;
+        window.ShowActivated = false;
+        window.ShowInTaskbar = false;
+        window.Show();
+        PumpDispatcher(TimeSpan.FromSeconds(1.5));
+        if (stage.StartsWith("viewer-", StringComparison.Ordinal))
+        {
+            var image = (System.Windows.Controls.Image)window.FindName("ViewerImage");
+            if (stage is "viewer-full" or "viewer-zoom-preview")
+            {
+                string method = stage == "viewer-full" ? "ApplyZoom" : "UpdateZoom";
+                typeof(ImageViewerWindow).GetMethod(method, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(window, new object[] { 1.0 });
+                PumpDispatcher(TimeSpan.FromSeconds(1.5));
+            }
+            pixelWidth = ((BitmapSource?)image.Source)?.PixelWidth ?? 0;
+            if (pixelWidth != (stage == "viewer-full" ? 4000 : 1024))
+                throw new InvalidOperationException($"Unexpected viewer decode size: {pixelWidth}.");
+        }
+        else if (stage == "image")
+        {
+            var editor = (System.Windows.Controls.RichTextBox)window.FindName("ContentRichTextBox");
+            pixelWidth = NoteDocumentCodec.Images(editor.Document).Single().ImageBitmap?.PixelWidth ?? 0;
+            if (pixelWidth != ImageDecodeService.MaxNotePreviewWidth)
+                throw new InvalidOperationException($"Unexpected inline decode size: {pixelWidth}.");
+        }
+        process.Refresh();
+        Console.WriteLine($"{stage}: baseline {baseline / MiB:F1}, private {process.PrivateMemorySize64 / MiB:F1}, " +
+            $"working {process.WorkingSet64 / MiB:F1}, managed {GC.GetTotalMemory(false) / MiB:F1} MiB, decoded width {pixelWidth}");
         window.Close();
     }
+
+    private static void PumpDispatcher(TimeSpan interval)
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = interval };
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Start();
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
+    private static void BenchmarkNotes()
+    {
+        const double MiB = 1024 * 1024;
+        var codec = new NoteDocumentCodec();
+        var document = new FlowDocument();
+        for (int i = 0; i < 250; i++) document.Blocks.Add(new Paragraph(new Run(new string('a', 800))));
+        string rtf = codec.Capture(document).Rtf;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        var loaded = codec.Load(rtf, Image);
+        Console.WriteLine($"Document load allocated {(GC.GetAllocatedBytesForCurrentThread() - before) / MiB:F2} MiB on the UI thread");
+        GC.KeepAlive(loaded);
+
+        using var process = Process.GetCurrentProcess();
+        void Sample(string phase)
+        {
+            PumpDispatcher(TimeSpan.FromMilliseconds(900));
+            process.Refresh();
+            Console.WriteLine($"{phase}: private {process.PrivateMemorySize64 / MiB:F1} MiB, working set {process.WorkingSet64 / MiB:F1} MiB, managed {GC.GetTotalMemory(false) / MiB:F1} MiB");
+        }
+        using var storage = new NoteStorageService(Path.Combine(Root, "note-benchmark"));
+        var store = new ImageAssetStore(NoteStorageService.GetEffectiveStoragePath());
+        string original = BenchmarkImage();
+        var models = new List<Note>();
+        for (int i = 0; i < 4; i++)
+        {
+            var note = new Note { Title = "Memory benchmark", Width = 900, Height = 620, X = -10000, Y = -10000 };
+            var image = store.Import(note.Id, original) with { WidthRatio = 1.0 };
+            note.RtfText = codec.Capture(new FlowDocument(new Paragraph(new InlineUIContainer(Image(image))))).Rtf;
+            models.Add(note);
+        }
+        Sample("Before windows");
+        var windows = models.Select(note => new NoteWindow(note) { ShowActivated = false }).ToList();
+        foreach (var window in windows) window.Show();
+        Sample("Four image notes");
+        foreach (var window in windows) window.Hide();
+        Sample("Hidden notes");
+        var histories = windows.Select(Suspend).ToArray();
+        windows.Clear();
+        ImageDecodeService.Clear();
+        Sample("Suspended notes");
+        foreach (var history in histories) history.Dispose();
+    }
+
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static string BenchmarkImage()
     {

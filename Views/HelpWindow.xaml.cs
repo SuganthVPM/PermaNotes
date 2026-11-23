@@ -106,6 +106,11 @@ namespace DesktopNotes.Views
                 {
                     ("screen-capture", "Hide from Screen Capture"),
                 }),
+                ("App Controls", new[]
+                {
+                    ("tray",     "System Tray and Show/Hide All"),
+                    ("settings", "Settings and Storage"),
+                }),
                 ("Productivity", new[]
                 {
                     ("reminders",       "Reminders"),
@@ -120,10 +125,13 @@ namespace DesktopNotes.Views
                     ("fmt-bold-italic",     "Bold, Italic & Underline"),
                     ("fmt-highlight-strike","Highlight & Strikethrough"),
                     ("fmt-hyperlinks",      "Hyperlinks & URLs"),
-                    ("fmt-images",          "Images & Photos"),
                     ("fmt-lists",           "Lists & Checklists"),
                     ("fmt-divider",         "Horizontal Divider"),
                     ("fmt-toolbar",         "Floating Format Toolbar"),
+                }),
+                ("Images", new[]
+                {
+                    ("fmt-images", "Images & Photos"),
                 }),
                 ("Keyboard Shortcuts", new[]
                 {
@@ -395,7 +403,7 @@ namespace DesktopNotes.Views
                     p.Children.Add(SectionHeader("How to Enable"));
                     p.Children.Add(Body("Click the cursor icon in the note's header bar, or right-click \u2192 Enable Click-Through."));
                     p.Children.Add(SectionHeader("How to Disable Click-Through"));
-                    p.Children.Add(Body("A floating pin button remains accessible over the note header, or you can use the system tray icon to restore mouse interaction."));
+                    p.Children.Add(Body("Use the floating pin button over the note header to restore mouse interaction. You can also open Note Manager from the tray and turn off click-through for the note there."));
                     p.Children.Add(Warning("While Click-Through is enabled, the note does not accept standard mouse clicks for editing."));
                     p.Children.Add(SectionHeader("Best Used With"));
                     p.Children.Add(Body("Click-Through works exceptionally well combined with reduced opacity \u2014 the note appears as a faint reference overlay without blocking your mouse."));
@@ -425,6 +433,20 @@ namespace DesktopNotes.Views
                     p.Children.Add(Body("Deleting permanently removes the note and all its content. This action cannot be undone."));
                     p.Children.Add(Body("Click the trash icon in the note's header, or right-click \u2192 Delete Note."));
                     p.Children.Add(Warning("Deletion is permanent. You can enable 'Confirm before deleting' in Settings to show a confirmation prompt before a note is removed."));
+                }),
+
+                ["tray"] = ("System Tray and Show/Hide All", "App Controls", p =>
+                {
+                    p.Children.Add(Body("Right-click the PermaNotes icon in the Windows notification area to create a note, open Note Manager, change settings, or exit."));
+                    p.Children.Add(SectionHeader("Show or hide all notes"));
+                    p.Children.Add(Body("Choose Hide All Notes to clear your desktop. Choose Show All Notes or double-click the tray icon to bring the notes back. Hiding a note keeps its Undo history for the current session."));
+                }),
+
+                ["settings"] = ("Settings and Storage", "App Controls", p =>
+                {
+                    p.Children.Add(Body("Open Settings from the tray icon or a note’s right-click menu. Set the default color and opacity for new notes, choose whether to confirm deletions, and turn Start with Windows on or off."));
+                    p.Children.Add(SectionHeader("Move your notes to another folder"));
+                    p.Children.Add(Body("Under Storage Location, choose Browse, select an empty folder, and save. PermaNotes verifies the copied notes and images before switching folders and leaves the previous copy available."));
                 }),
 
                 // -- Appearance -----------------------------------------------
@@ -643,18 +665,19 @@ namespace DesktopNotes.Views
                     p.Children.Add(Tip("Click any link to reveal the popup card with the clickable URL and Copy button."));
                 }),
 
-                ["fmt-images"] = ("Images & Photos", "Text Formatting", p =>
+                ["fmt-images"] = ("Images & Photos", "Images", p =>
                 {
                     p.Children.Add(SectionHeader("Add an image"));
                     p.Children.Add(Body("Copy an image or capture a screenshot with Win+Shift+S, then press Ctrl+V inside a note. You can also drop a PNG, JPEG, BMP, or GIF file from File Explorer."));
                     p.Children.Add(Body("Image files can be up to 25 MiB and 40 megapixels. GIFs display their first frame."));
                     p.Children.Add(SectionHeader("Resize and view"));
                     p.Children.Add(Body("Images start at 30% of the note width and scale as you resize the note. Drag an image’s bottom-right grip to resize it, or right-click the image and choose 30%, 50%, 75%, or 100%."));
-                    p.Children.Add(Body("Double-click an image or choose the view icon from its right-click menu. In the viewer, drag the image to pan, use Ctrl+mouse wheel to zoom, or select Fit or 1:1."));
+                    p.Children.Add(Body("Double-click an image or choose View full size from its right-click menu. In the viewer, drag the image to pan, use Ctrl+mouse wheel to zoom, or select Fit or 1:1."));
+                    p.Children.Add(Body("The viewer starts with a smaller preview. Zoom in for more detail, or choose Fit to return to the preview. Copy and export use the full-resolution image."));
                     p.Children.Add(SectionHeader("Copy, save, or remove"));
-                    p.Children.Add(Body("Right-click the image to copy it at full resolution, export it as PNG or JPEG, save the original image file, or remove it from the note. Use Ctrl+Z to undo a removal."));
+                    p.Children.Add(Body("Right-click the image and choose Copy image, Export PNG/JPEG, Save original, or Remove from note. Save original keeps the source format. Use Ctrl+Z or Ctrl+Y to undo or redo image edits."));
                     p.Children.Add(SectionHeader("Recover a missing image"));
-                    p.Children.Add(Body("Right-click the placeholder and choose Retry image if you restored the file. Choose Replace or relink image to select a replacement file."));
+                    p.Children.Add(Body("Right-click the placeholder and choose Reload image if you restored the linked file. Choose Replace image to locate the original in a new folder or select a different file."));
                 }),
 
                 // -- Keyboard Shortcuts ---------------------------------------

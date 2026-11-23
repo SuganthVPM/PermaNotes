@@ -64,6 +64,7 @@ namespace DesktopNotes
 
         /// <summary>Currently visible <see cref="NoteWindow"/> instances, in creation order.</summary>
         private readonly List<NoteWindow> _activeNoteWindows = new();
+        private readonly Dictionary<Guid, NoteEditorHistory> _hiddenHistories = new();
         private bool _reloadingStorage, _isExiting;
         private bool _notesLoaded;
 
@@ -131,13 +132,8 @@ namespace DesktopNotes
                     string noteId = args["noteId"];
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel.Id.ToString() == noteId);
-                        if (window != null)
-                        {
-                            if (!window.IsVisible) window.Show();
-                            window.Activate();
-                            window.Focus();
-                        }
+                        var note = _allNotes.FirstOrDefault(n => !n.IsClosed && n.Id.ToString() == noteId);
+                        if (note != null) ActivateNote(note);
                     }));
                 }
             };
@@ -333,10 +329,10 @@ namespace DesktopNotes
                          + "• Double-click title to rename\n"
                          + "• Right-click for colors, opacity & settings!\n\n"
                          + "Images & screenshots\n"
-                         + "• Paste with Ctrl+V or drop an image file into the note.\n"
-                         + "• Right-click an image for options. Double-click to view it full size.",
+                         + "• Capture with Win+Shift+S and paste with Ctrl+V, or drop an image file here.\n"
+                         + "• Right-click an image to resize, copy, or save it. Double-click to view it full size.",
                     X = 200, Y = 180,
-                    Width = 340, Height = 340,
+                    Width = 340, Height = 360,
                     BackgroundColor = settings.DefaultNoteColor,
                     Opacity = settings.DefaultOpacity
                 };
@@ -362,10 +358,11 @@ namespace DesktopNotes
         private void CreateNoteWindowInstance(Note note)
         {
             _storageService.EnsureContentLoaded(note);
-            var window = new NoteWindow(note);
+            _hiddenHistories.Remove(note.Id, out var history);
+            var window = new NoteWindow(note, history);
             window.Closed += (_, _) =>
             {
-                if (_activeNoteWindows.Remove(window) && !_reloadingStorage && !_isExiting)
+                if (_activeNoteWindows.Remove(window) && !window.IsSuspending && !_reloadingStorage && !_isExiting)
                 { note.IsClosed = true; OnNotesStateChanged(); }
             };
 
@@ -500,6 +497,10 @@ namespace DesktopNotes
                     CreateNoteWindowInstance(note);
                     changed = true;
                 }
+                else if (_hiddenHistories.ContainsKey(note.Id))
+                {
+                    CreateNoteWindowInstance(note);
+                }
             }
             
             if (changed) OnNotesStateChanged();
@@ -510,17 +511,39 @@ namespace DesktopNotes
             }
             foreach (var w in _activeNoteWindows)
             {
-                w.Show();
+                if (!w.IsVisible) w.Show();
                 w.WindowState = WindowState.Normal;
             }
         }
 
         private void HideAllNotes()
         {
-            foreach (var w in _activeNoteWindows)
+            foreach (var window in _activeNoteWindows.ToArray())
             {
-                w.Hide();
+                var history = window.SuspendForHide();
+                if (history != null) _hiddenHistories.Add(window.NoteModel.Id, history);
             }
+            ImageDecodeService.Clear();
+        }
+
+        internal void CloseHiddenNote(Note note)
+        {
+            if (_hiddenHistories.Remove(note.Id, out var history)) history.Dispose();
+            note.IsClosed = true;
+            OnNotesStateChanged();
+        }
+
+        internal void DeleteStoredNote(Note note)
+        {
+            if (_hiddenHistories.Remove(note.Id, out var history)) history.Dispose();
+            _allNotes.Remove(note);
+            OnNotesStateChanged();
+        }
+
+        private void DisposeHiddenHistories()
+        {
+            foreach (var history in _hiddenHistories.Values) history.Dispose();
+            _hiddenHistories.Clear();
         }
 
         // ===================== PERSISTENCE =====================
@@ -585,16 +608,12 @@ namespace DesktopNotes
                 ContextMenuStrip = new ContextMenuStrip()
             };
 
-            _trayIcon.ContextMenuStrip.Opening += TrayContextMenu_Opening;
+            PopulateTrayMenu(_trayIcon.ContextMenuStrip);
             _trayIcon.DoubleClick += (s, e) => Dispatcher.Invoke(ShowAllNotes);
         }
 
-        private void TrayContextMenu_Opening(object? sender, System.ComponentModel.CancelEventArgs e)
+        private void PopulateTrayMenu(ContextMenuStrip menu)
         {
-            if (_trayIcon?.ContextMenuStrip == null) return;
-            var menu = _trayIcon.ContextMenuStrip;
-            menu.Items.Clear();
-
             menu.Items.Add("New Note", null, (s, ev) => Dispatcher.Invoke(() => SpawnNewNote()));
             menu.Items.Add("Note Manager", null, (s, ev) => Dispatcher.Invoke(OpenNoteManager));
             menu.Items.Add(new ToolStripSeparator());
@@ -623,12 +642,7 @@ namespace DesktopNotes
             var settingsWindow = new SettingsWindow();
             if (settingsWindow.ShowDialog() == true)
             {
-                // Storage path was changed
                 var newPath = settingsWindow.RequestedStoragePath;
-                if (string.IsNullOrWhiteSpace(newPath))
-                {
-                    newPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PermaNotes");
-                }
                 
                 if (_activeNoteWindows.Any(w => !w.FlushDocument()) || !_storageService.SaveNotesImmediate(_allNotes)) return;
                 if (ImageAssetStore.HasPendingImports)
@@ -647,6 +661,7 @@ namespace DesktopNotes
                 {
                     foreach (var win in _activeNoteWindows.ToList()) win.Close();
                     _activeNoteWindows.Clear();
+                    DisposeHiddenHistories();
                     LoadNotes();
                 }
                 finally { _reloadingStorage = false; }
@@ -674,6 +689,10 @@ namespace DesktopNotes
                 note.IsClosed = false;
                 CreateNoteWindowInstance(note);
                 OnNotesStateChanged();
+            }
+            else if (_hiddenHistories.ContainsKey(note.Id))
+            {
+                CreateNoteWindowInstance(note);
             }
             
             var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel == note);
@@ -839,6 +858,7 @@ namespace DesktopNotes
                 foreach (var window in _activeNoteWindows.ToList()) window.FlushDocument();
                 _storageService.SaveNotesImmediate(_allNotes);
             }
+            DisposeHiddenHistories();
             _storageService.Dispose();
             _trayIcon?.Dispose();
             base.OnExit(e);

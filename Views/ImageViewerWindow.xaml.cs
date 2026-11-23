@@ -3,14 +3,17 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using Microsoft.Win32;
 using DesktopNotes.Services;
 
 namespace DesktopNotes.Views
 {
     public partial class ImageViewerWindow : Window
     {
-        private BitmapSource? _bitmap;
+        private BitmapSource? DisplayedBitmap => ViewerImage.Source as BitmapSource;
+        private ImagePreview? _preview;
+        private Task<BitmapSource>? _originalRequest;
+        private bool _upgradingPreview;
+        private bool _needsOriginal;
         private string _imagePath = string.Empty;
         private double _zoomFactor = 1.0;
         private readonly System.Threading.CancellationTokenSource _load = new();
@@ -19,7 +22,12 @@ namespace DesktopNotes.Views
 
         private void InitializeLifecycle()
         {
-            Closed += (_, _) => { _load.Cancel(); ViewerImage.Source = null; _bitmap = null; };
+            Closed += (_, _) =>
+            {
+                _load.Cancel();
+                ViewerImage.Source = null;
+                _preview = null;
+            };
             ImageContainer.PreviewMouseLeftButtonDown += (_, e) =>
             {
                 _panStart = e.GetPosition(ImageScrollViewer);
@@ -44,7 +52,7 @@ namespace DesktopNotes.Views
             surface.Clip = new System.Windows.Media.RectangleGeometry(new Rect(e.NewSize), 9, 9);
         }
 
-        public ImageViewerWindow(string imagePath, string title = "Image Viewer")
+        public ImageViewerWindow(string imagePath)
         {
             InitializeComponent();
             InitializeLifecycle();
@@ -58,7 +66,6 @@ namespace DesktopNotes.Views
         {
             InitializeComponent();
             InitializeLifecycle();
-            _bitmap = bitmap;
             TitleTextBlock.Text = title;
 
             SetBitmap(bitmap);
@@ -70,10 +77,10 @@ namespace DesktopNotes.Views
 
             try
             {
-                var bi = await ImageDecodeService.LoadAsync(path, 0, _load.Token);
+                var preview = await ImageDecodeService.LoadViewerPreviewAsync(path, _load.Token);
                 if (_load.IsCancellationRequested) return;
-                _bitmap = bi;
-                SetBitmap(bi);
+                _preview = preview;
+                SetBitmap(preview.Bitmap, preview);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -82,15 +89,29 @@ namespace DesktopNotes.Views
             }
         }
 
-        private void SetBitmap(BitmapSource bitmap)
+        private void SetBitmap(BitmapSource bitmap, ImagePreview? preview = null)
         {
+            ViewerImage.Width = preview?.Width ?? bitmap.Width;
+            ViewerImage.Height = preview?.Height ?? bitmap.Height;
             ViewerImage.Source = bitmap;
-            ResolutionTextBlock.Text = $"{bitmap.PixelWidth} × {bitmap.PixelHeight} px";
+            ResolutionTextBlock.Text = $"{preview?.PixelWidth ?? bitmap.PixelWidth} × {preview?.PixelHeight ?? bitmap.PixelHeight} px";
 
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(FitToScreen));
         }
 
         private void ApplyZoom(double newZoom)
+        {
+            UpdateZoom(newZoom);
+            if (_preview is not { } preview) return;
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(ViewerImage);
+            bool originalSize = preview.Bitmap.PixelWidth == preview.PixelWidth && preview.Bitmap.PixelHeight == preview.PixelHeight;
+            _needsOriginal = !originalSize && (ViewerImage.Width * _zoomFactor * dpi.DpiScaleX > preview.Bitmap.PixelWidth ||
+                ViewerImage.Height * _zoomFactor * dpi.DpiScaleY > preview.Bitmap.PixelHeight);
+            if (_needsOriginal) UpgradePreview();
+            else UseFitPreview();
+        }
+
+        private void UpdateZoom(double newZoom)
         {
             _zoomFactor = Math.Max(0.005, Math.Min(5.0, newZoom));
             ImageScaleTransform.ScaleX = _zoomFactor;
@@ -98,21 +119,59 @@ namespace DesktopNotes.Views
             ZoomPercentText.Text = $"{(int)(_zoomFactor * 100)}%";
         }
 
+        private void UseFitPreview()
+        {
+            if (_preview is not { } preview) return;
+            _needsOriginal = false;
+            ViewerImage.Source = preview.Bitmap;
+        }
+
+        private async Task<BitmapSource> GetOriginalAsync()
+        {
+            if (DisplayedBitmap is { } bitmap && (_preview == null ||
+                (bitmap.PixelWidth == _preview.PixelWidth && bitmap.PixelHeight == _preview.PixelHeight)))
+                return bitmap;
+
+            var request = _originalRequest ??= ImageDecodeService.LoadAsync(_imagePath, 0, _load.Token);
+            try { return await request; }
+            finally { if (ReferenceEquals(_originalRequest, request)) _originalRequest = null; }
+        }
+
+        private async void UpgradePreview()
+        {
+            if (_upgradingPreview || (_preview != null && DisplayedBitmap != _preview.Bitmap)) return;
+            _upgradingPreview = true;
+            try
+            {
+                var original = await GetOriginalAsync();
+                if (!_needsOriginal || _load.IsCancellationRequested) return;
+                ViewerImage.Source = original;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                if (!_load.IsCancellationRequested)
+                    System.Windows.MessageBox.Show(this, ex.Message, "Full-size image unavailable");
+            }
+            finally { _upgradingPreview = false; }
+        }
+
         private void FitToScreen()
         {
-            if (_bitmap == null) return;
+            if (DisplayedBitmap == null) return;
 
             double viewWidth = ImageScrollViewer.ActualWidth > 50 ? ImageScrollViewer.ActualWidth - 30 : 700;
             double viewHeight = ImageScrollViewer.ActualHeight > 50 ? ImageScrollViewer.ActualHeight - 30 : 500;
 
-            double scaleX = viewWidth / _bitmap.Width;
-            double scaleY = viewHeight / _bitmap.Height;
+            double scaleX = viewWidth / ViewerImage.Width;
+            double scaleY = viewHeight / ViewerImage.Height;
             double fitScale = Math.Min(scaleX, scaleY);
 
             // Don't upscale small images beyond 100% on initial fit
             if (fitScale > 1.0) fitScale = 1.0;
 
-            ApplyZoom(fitScale);
+            UpdateZoom(fitScale);
+            UseFitPreview();
         }
 
         private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -121,11 +180,6 @@ namespace DesktopNotes.Views
             {
                 DragMove();
             }
-        }
-
-        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            // Close on click outside if desired, or allow drag
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -169,13 +223,15 @@ namespace DesktopNotes.Views
             }
         }
 
-        private void Copy_Click(object sender, RoutedEventArgs e)
+        private async void Copy_Click(object sender, RoutedEventArgs e)
         {
-            if (_bitmap != null)
+            if (DisplayedBitmap != null)
             {
                 try
                 {
-                    System.Windows.Clipboard.SetImage(_bitmap);
+                    var original = await GetOriginalAsync();
+                    if (_load.IsCancellationRequested) return;
+                    System.Windows.Clipboard.SetImage(original);
                     CopyBtn.ToolTip = "Copied!";
                     var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
                     timer.Tick += (s, args) =>
@@ -185,13 +241,14 @@ namespace DesktopNotes.Views
                     };
                     timer.Start();
                 }
-                catch { }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { System.Windows.MessageBox.Show(this, ex.Message, "Copy image"); }
             }
         }
 
-        private void SaveAs_Click(object sender, RoutedEventArgs e)
+        private async void SaveAs_Click(object sender, RoutedEventArgs e)
         {
-            if (_bitmap == null) return;
+            if (DisplayedBitmap == null) return;
 
             var sfd = new Microsoft.Win32.SaveFileDialog
             {
@@ -205,8 +262,11 @@ namespace DesktopNotes.Views
             {
                 try
                 {
-                    ImageExportService.Export(_bitmap, sfd.FileName);
+                    var original = await GetOriginalAsync();
+                    if (_load.IsCancellationRequested) return;
+                    ImageExportService.Export(original, sfd.FileName);
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);

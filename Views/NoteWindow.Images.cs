@@ -18,7 +18,8 @@ public partial class NoteWindow
     private long _editVersion;
     private NoteImageControl? _activeImageControl;
     private readonly NoteDocumentCodec _documentCodec = new();
-    private readonly NoteEditorHistory _history = new();
+    private readonly NoteEditorHistory _history;
+    internal bool IsSuspending { get; private set; }
     private const string ClipboardFormat = "PermaNotes.Document.v1";
     private DispatcherTimer? _captureTimer;
     private ImageAssetStore Assets => new(NoteStorageService.GetEffectiveStoragePath());
@@ -82,9 +83,29 @@ public partial class NoteWindow
             (_, e) => { e.CanExecute = !NoteModel.IsLocked && _history.CanRedo; e.Handled = true; }));
         var initial = _documentCodec.Capture(ContentRichTextBox.Document);
         NoteModel.RtfText = initial.Rtf; NoteModel.Text = initial.Text; NoteModel.Images = initial.Images.ToList();
-        RecordHistory(initial);
+        if (_history.Current is { } checkpoint) RestoreImageEditorSelection(checkpoint);
+        else RecordHistory(initial);
         Closing += (_, e) => { if (!FlushDocument()) e.Cancel = true; };
-        Closed += (_, _) => { _closed = true; _captureTimer.Stop(); _history.Dispose(); };
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _captureTimer.Stop();
+            foreach (var image in NoteDocumentCodec.Images(ContentRichTextBox.Document))
+                image.ReleaseThumbnail();
+            if (!IsSuspending) _history.Dispose();
+        };
+    }
+
+    internal NoteEditorHistory? SuspendForHide()
+    {
+        if (_importing) { Hide(); return null; }
+        if (!FlushDocument()) return null;
+        var start = ContentRichTextBox.Document.ContentStart;
+        var selection = ContentRichTextBox.Selection;
+        _history.UpdateSelection(start.GetOffsetToPosition(selection.Start), start.GetOffsetToPosition(selection.End));
+        IsSuspending = true;
+        Close();
+        return _history;
     }
     private void CopySelection(bool cut)
     {
@@ -206,14 +227,20 @@ public partial class NoteWindow
         {
             ContentRichTextBox.Document = _documentCodec.Load(state.Document.Rtf, CreateImage);
             ApplyBackgroundColor(NoteModel.BackgroundColor);
-            var doc = ContentRichTextBox.Document;
-            ContentRichTextBox.Selection.Select(doc.ContentStart.GetPositionAtOffset(state.SelectionStart) ?? doc.ContentEnd,
-                doc.ContentStart.GetPositionAtOffset(state.SelectionEnd) ?? doc.ContentEnd);
+            RestoreImageEditorSelection(state);
             NoteModel.RtfText = state.Document.Rtf; NoteModel.Text = state.Document.Text;
             NoteModel.Images = state.Document.Images.ToList(); NoteModel.UpdatedAt = DateTime.Now;
         }
         finally { _isSerializing = false; }
         NoteChanged?.Invoke(this, EventArgs.Empty); CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void RestoreImageEditorSelection(EditorCheckpoint state)
+    {
+        var document = ContentRichTextBox.Document;
+        var start = document.ContentStart.GetPositionAtOffset(state.SelectionStart) ?? document.ContentEnd;
+        var end = document.ContentStart.GetPositionAtOffset(state.SelectionEnd) ?? document.ContentEnd;
+        ContentRichTextBox.Selection.Select(start, end);
     }
     public void NotifySaveResult(bool success, string? error = null)
     {
@@ -264,7 +291,15 @@ public partial class NoteWindow
         if (errors.Count > 0) System.Windows.MessageBox.Show(this, string.Join("\n", errors), "Image import", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
     private void ContentRichTextBox_SizeChanged(object sender, SizeChangedEventArgs e)
-    { if (e.WidthChanged) foreach (var image in NoteDocumentCodec.Images(ContentRichTextBox.Document)) image.UpdateResponsiveWidth(EditorWidth); }
+    {
+        if (e.WidthChanged) UpdateImageWidths(refreshThumbnails: !_isResizing);
+    }
+
+    private void UpdateImageWidths(bool refreshThumbnails)
+    {
+        foreach (var image in NoteDocumentCodec.Images(ContentRichTextBox.Document))
+            image.UpdateResponsiveWidth(EditorWidth, refreshThumbnails);
+    }
     private void ContentRichTextBox_DragOver(object sender, System.Windows.DragEventArgs e)
     {
         e.Effects = !NoteModel.IsLocked && e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files && files.Any(IsImageFile)
@@ -298,18 +333,28 @@ public partial class NoteWindow
         ImageActionPopup.IsOpen = false;
         _activeImageControl = image;
         bool hasFile = File.Exists(image.FullPath);
-        foreach (var button in new[] { ImageRatio30Btn, ImageRatio50Btn, ImageRatio75Btn, ImageRatio100Btn, DeleteImageBtn }) button.IsEnabled = !NoteModel.IsLocked;
+        foreach (var option in new[] { ImageRatio30Btn, ImageRatio50Btn, ImageRatio75Btn, ImageRatio100Btn })
+            option.IsEnabled = !NoteModel.IsLocked;
+        UpdateImageWidthSelection(image.WidthRatio);
+        DeleteImageBtn.IsEnabled = !NoteModel.IsLocked;
         ViewImageFullBtn.IsEnabled = CopyImageBtn.IsEnabled = SaveImageAsBtn.IsEnabled = SaveOriginalImageBtn.IsEnabled = hasFile;
         RelinkImageBtn.IsEnabled = !NoteModel.IsLocked && !_importing;
         ImageActionPopup.PlacementTarget = image;
         ImageActionPopup.IsOpen = true;
+    }
+
+    private void UpdateImageWidthSelection(double ratio)
+    {
+        ImageRatio30Btn.IsChecked = Math.Abs(ratio - .30) < .005;
+        ImageRatio50Btn.IsChecked = Math.Abs(ratio - .50) < .005;
+        ImageRatio75Btn.IsChecked = Math.Abs(ratio - .75) < .005;
+        ImageRatio100Btn.IsChecked = Math.Abs(ratio - 1.00) < .005;
     }
     private void RetryImageBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_activeImageControl is not { } image) return;
         ImageActionPopup.IsOpen = false;
         image.LoadReference(Assets.Resolve(NoteModel.Id, image.FileName), image.Reference, EditorWidth);
-        image.RefreshThumbnail();
     }
     private async void RelinkImageBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -329,10 +374,12 @@ public partial class NoteWindow
     }
     private void ImageSizePreset_Click(object sender, RoutedEventArgs e)
     {
-        if (NoteModel.IsLocked || _activeImageControl == null || !FlushDocument()) return;
-        if (sender is FrameworkElement { Tag: string ratio } && double.TryParse(ratio,
+        if (_activeImageControl is not { } image) return;
+        if (!NoteModel.IsLocked && FlushDocument() &&
+            sender is FrameworkElement { Tag: string ratio } && double.TryParse(ratio,
                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var width))
-            _activeImageControl.SetWidthRatio(width, EditorWidth);
+            image.SetWidthRatio(width, EditorWidth);
+        UpdateImageWidthSelection(image.WidthRatio);
     }
     private void OpenFullSizeImageBtn_Click(object sender, RoutedEventArgs e) { if (_activeImageControl != null) OpenImageViewer(_activeImageControl); }
     private async void CopyImageBtn_Click(object sender, RoutedEventArgs e)

@@ -12,6 +12,7 @@ public sealed class NoteEditorHistory : IDisposable
     private long _stamp;
     public bool CanUndo => _position > 0;
     public bool CanRedo => _position >= 0 && _position < _states.Count - 1;
+    internal EditorCheckpoint? Current => _position >= 0 ? _states[_position] : null;
     public NoteEditorHistory() => Sessions.Add(new(this));
 
     public void Record(EditorCheckpoint state)
@@ -24,6 +25,12 @@ public sealed class NoteEditorHistory : IDisposable
     }
     public EditorCheckpoint? Undo() => CanUndo ? _states[--_position] : null;
     public EditorCheckpoint? Redo() => CanRedo ? _states[++_position] : null;
+
+    internal void UpdateSelection(int start, int end)
+    {
+        if (Current is { } state)
+            _states[_position] = state with { SelectionStart = start, SelectionEnd = end };
+    }
     private long Bytes => _states.Sum(s => (long)(s.Document.Rtf.Length + s.Document.Text.Length) * 2);
     private void DropOldest()
     {
