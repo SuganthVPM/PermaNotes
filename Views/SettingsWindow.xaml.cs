@@ -166,6 +166,8 @@ namespace DesktopNotes.Views
             "DesktopNotes", "settings.json");
 #endif
 
+        internal static bool HasSavedSettings => File.Exists(SettingsPath);
+
         public static AppSettings Load()
         {
             try
