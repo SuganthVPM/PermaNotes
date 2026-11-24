@@ -29,7 +29,7 @@ namespace DesktopNotes
     ///  - Desktop integration: attaches note windows to the WorkerW layer so they
     ///    remain visible during Win+D (Show Desktop) but sit behind normal windows.
     ///  - Explorer restart detection: re-attaches windows when Taskbar is restarted.
-    ///  - Periodic memory trimming (every 60 s) to reduce working-set size.
+    ///  - Bounded image decoding and lazy closed-note content loading.
     ///  - Debounced, atomic JSON persistence via <see cref="NoteStorageService"/>.
     ///  - Multi-monitor guard: notes that end up off-screen are moved to the primary monitor.
     ///  - Log rotation at 512 KB.
@@ -39,7 +39,11 @@ namespace DesktopNotes
         // --- Constants ---
 
         /// <summary>Named mutex that guarantees only one PermaNotes process runs at a time.</summary>
+#if DEV
+        private const string MutexName = "DesktopNotes_SingleInstance_DEV";
+#else
         private const string MutexName = "DesktopNotes_SingleInstance_F7A2B";
+#endif
 
         /// <summary>Win32 hotkey ID for Ctrl+Alt+N (create new note globally).</summary>
         private const int HOTKEY_ID_NEW_NOTE = 9001;
@@ -60,6 +64,9 @@ namespace DesktopNotes
 
         /// <summary>Currently visible <see cref="NoteWindow"/> instances, in creation order.</summary>
         private readonly List<NoteWindow> _activeNoteWindows = new();
+        private readonly Dictionary<Guid, NoteEditorHistory> _hiddenHistories = new();
+        private bool _reloadingStorage, _isExiting;
+        private bool _notesLoaded;
 
         /// <summary>Handles debounced, atomic JSON writes to the storage directory.</summary>
         private readonly NoteStorageService _storageService = new();
@@ -76,13 +83,16 @@ namespace DesktopNotes
         /// <summary>Registered message ID for the "TaskbarCreated" broadcast (Explorer restart detection).</summary>
         private uint _taskbarCreatedMessageId;
 
-        /// <summary>Fires every 60 s to trim the process working-set and encourage GC.</summary>
-        private System.Timers.Timer? _memoryTimer;
         private System.Timers.Timer? _reminderTimer;
 
         // --- Logging ---
+#if DEV
+        private static readonly string LogDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNotes_Dev");
+#else
         private static readonly string LogDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNotes");
+#endif
         private static readonly string TraceLogPath = Path.Combine(LogDir, "app_trace.log");
 
         /// <summary>
@@ -92,6 +102,21 @@ namespace DesktopNotes
         public App()
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _storageService.SaveCompleted += result =>
+            {
+                if (Dispatcher.HasShutdownStarted) return;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (result.Generation != _storageService.Generation) return;
+                    foreach (var window in _activeNoteWindows)
+                    {
+                        var saved = result.Notes.FirstOrDefault(n => n.Id == window.NoteModel.Id);
+                        if (saved != null && saved.UpdatedAt == window.NoteModel.UpdatedAt)
+                            window.NotifySaveResult(result.Success, result.Error);
+                    }
+                    if (!result.Success) Trace("Save failed: " + result.Error);
+                }));
+            };
         }
 
         // ===================== TOAST ACTIVATION =====================
@@ -107,13 +132,8 @@ namespace DesktopNotes
                     string noteId = args["noteId"];
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel.Id.ToString() == noteId);
-                        if (window != null)
-                        {
-                            if (!window.IsVisible) window.Show();
-                            window.Activate();
-                            window.Focus();
-                        }
+                        var note = _allNotes.FirstOrDefault(n => !n.IsClosed && n.Id.ToString() == noteId);
+                        if (note != null) ActivateNote(note);
                     }));
                 }
             };
@@ -122,7 +142,7 @@ namespace DesktopNotes
         private void InitializeReminderMonitoring()
         {
             _reminderTimer = new System.Timers.Timer(10000); // Poll every 10 seconds
-            _reminderTimer.Elapsed += (s, e) => CheckDueReminders();
+            _reminderTimer.Elapsed += (s, e) => Dispatcher.BeginInvoke(new Action(CheckDueReminders));
             _reminderTimer.Start();
         }
 
@@ -213,6 +233,8 @@ namespace DesktopNotes
 
             try
             {
+                try { ImageAssetMaintenance.CollectAtColdStart(NoteStorageService.GetEffectiveStoragePath(), DateTime.UtcNow); }
+                catch (Exception ex) { Trace("Asset cleanup skipped: " + ex.Message); }
                 // --- Desktop integration ---
                 _desktopWindowService.InitializeDesktopIntegration();
                 Trace($"Desktop integration: attached={_desktopWindowService.IsDesktopAttached}");
@@ -229,26 +251,61 @@ namespace DesktopNotes
                 // --- Register Toast Activation ---
                 RegisterToastActivation();
 
-                // --- Memory Trimming ---
-                _memoryTimer = new System.Timers.Timer(30000); // Trim every 30 seconds
-                _memoryTimer.Elapsed += (s, e) => TrimMemory();
-                _memoryTimer.Start();
+                // Let the runtime manage residency. Periodic forced collections and
+                // working-set eviction conceal allocation costs and cause refaults.
 
                 // --- Reminder Monitoring (Dual-layer: in-app timer + Windows scheduled toast) ---
                 InitializeReminderMonitoring();
 
-                // Post-startup trim after all WPF windows finish loading and rendering
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>
+                // --- Show Onboarding / Updates Wizard ---
+                var settings = AppSettings.Load();
+                var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+
+                bool forceTour = e.Args != null && e.Args.Any(a => a.Equals("--tour", StringComparison.OrdinalIgnoreCase) || a.Equals("--welcome", StringComparison.OrdinalIgnoreCase));
+                bool forceUpdateTour = e.Args != null && e.Args.Any(a => a.Equals("--tour-update", StringComparison.OrdinalIgnoreCase));
+
+                if (forceUpdateTour)
                 {
-                    await System.Threading.Tasks.Task.Delay(1500);
-                    TrimMemory();
-                }));
+                    var onboarding = new OnboardingWindow(OnboardingMode.Update);
+                    onboarding.Show();
+                    onboarding.Activate();
+                }
+                else if (forceTour || string.IsNullOrEmpty(settings.LastSeenVersion))
+                {
+                    // First time install or explicit CLI flag
+                    var onboarding = new OnboardingWindow(OnboardingMode.FirstTime);
+                    onboarding.Show();
+                    onboarding.Activate();
+                    if (!forceTour)
+                    {
+                        settings.LastSeenVersion = currentVersion;
+                        settings.Save();
+                    }
+                }
+                else if (settings.LastSeenVersion != currentVersion)
+                {
+                    // Update detected
+                    if (Version.TryParse(currentVersion, out var currV) && Version.TryParse(settings.LastSeenVersion, out var lastV))
+                    {
+                        if (currV > lastV)
+                        {
+                            var onboarding = new OnboardingWindow(OnboardingMode.Update);
+                            onboarding.Show();
+                            onboarding.Activate();
+                        }
+                    }
+                    settings.LastSeenVersion = currentVersion;
+                    settings.Save();
+                }
+
 
                 Trace($"Active windows: {_activeNoteWindows.Count}");
             }
             catch (Exception ex)
             {
                 Trace($"Exception in OnStartup: {ex}");
+                MessageBox.Show("PermaNotes could not start. " + ex.Message, "PermaNotes");
+                if (!_notesLoaded) Shutdown();
             }
         }
 
@@ -270,9 +327,12 @@ namespace DesktopNotes
                          + "• Normal apps cover notes\n"
                          + "• Drag header to move\n"
                          + "• Double-click title to rename\n"
-                         + "• Right-click for colors, opacity & settings!",
+                         + "• Right-click for colors, opacity & settings!\n\n"
+                         + "Images & screenshots\n"
+                         + "• Capture with Win+Shift+S and paste with Ctrl+V, or drop an image file here.\n"
+                         + "• Right-click an image to resize, copy, or save it. Double-click to view it full size.",
                     X = 200, Y = 180,
-                    Width = 340, Height = 300,
+                    Width = 340, Height = 360,
                     BackgroundColor = settings.DefaultNoteColor,
                     Opacity = settings.DefaultOpacity
                 };
@@ -282,6 +342,7 @@ namespace DesktopNotes
 
             _allNotes.Clear();
             _allNotes.AddRange(savedNotes);
+            _notesLoaded = true;
 
             ValidateNotePositions(_allNotes);
 
@@ -296,7 +357,14 @@ namespace DesktopNotes
 
         private void CreateNoteWindowInstance(Note note)
         {
-            var window = new NoteWindow(note);
+            _storageService.EnsureContentLoaded(note);
+            _hiddenHistories.Remove(note.Id, out var history);
+            var window = new NoteWindow(note, history);
+            window.Closed += (_, _) =>
+            {
+                if (_activeNoteWindows.Remove(window) && !window.IsSuspending && !_reloadingStorage && !_isExiting)
+                { note.IsClosed = true; OnNotesStateChanged(); }
+            };
 
             // Attach to desktop when loaded
             window.Loaded += (s, _) =>
@@ -379,8 +447,9 @@ namespace DesktopNotes
         /// </summary>
         internal void CloseNoteWindow(NoteWindow window)
         {
+            if (!window.FlushDocument()) return;
             // If the note has no content and title is default, delete it permanently instead of just closing it
-            bool isEmpty = string.IsNullOrWhiteSpace(window.NoteModel.Text) && 
+            bool isEmpty = window.NoteModel.Images.Count == 0 && string.IsNullOrWhiteSpace(window.NoteModel.Text) &&
                            window.NoteModel.Title == "New Note";
 
             if (isEmpty)
@@ -393,6 +462,14 @@ namespace DesktopNotes
             _activeNoteWindows.Remove(window);
             window.Close();
             OnNotesStateChanged();
+            // Persist before releasing the closed document's serialized content.
+            if (_storageService.SaveNotesImmediate(_allNotes))
+            {
+                window.NoteModel.ContentFilePath = System.IO.Directory.EnumerateFiles(
+                    System.IO.Path.Combine(NoteStorageService.GetEffectiveStoragePath(), "Notes"), "*_" + NoteStorageService.GetShortId(window.NoteModel.Id) + ".rtf").FirstOrDefault();
+                window.NoteModel.IsContentLoaded = window.NoteModel.ContentFilePath == null;
+                if (!window.NoteModel.IsContentLoaded) window.NoteModel.RtfText = "";
+            }
         }
 
         /// <summary>
@@ -401,6 +478,7 @@ namespace DesktopNotes
         /// </summary>
         internal void DeleteNoteWindow(NoteWindow window)
         {
+            window.DiscardPendingChanges();
             _allNotes.Remove(window.NoteModel);
             _activeNoteWindows.Remove(window);
             window.Close();
@@ -419,6 +497,10 @@ namespace DesktopNotes
                     CreateNoteWindowInstance(note);
                     changed = true;
                 }
+                else if (_hiddenHistories.ContainsKey(note.Id))
+                {
+                    CreateNoteWindowInstance(note);
+                }
             }
             
             if (changed) OnNotesStateChanged();
@@ -429,17 +511,39 @@ namespace DesktopNotes
             }
             foreach (var w in _activeNoteWindows)
             {
-                w.Show();
+                if (!w.IsVisible) w.Show();
                 w.WindowState = WindowState.Normal;
             }
         }
 
         private void HideAllNotes()
         {
-            foreach (var w in _activeNoteWindows)
+            foreach (var window in _activeNoteWindows.ToArray())
             {
-                w.Hide();
+                var history = window.SuspendForHide();
+                if (history != null) _hiddenHistories.Add(window.NoteModel.Id, history);
             }
+            ImageDecodeService.Clear();
+        }
+
+        internal void CloseHiddenNote(Note note)
+        {
+            if (_hiddenHistories.Remove(note.Id, out var history)) history.Dispose();
+            note.IsClosed = true;
+            OnNotesStateChanged();
+        }
+
+        internal void DeleteStoredNote(Note note)
+        {
+            if (_hiddenHistories.Remove(note.Id, out var history)) history.Dispose();
+            _allNotes.Remove(note);
+            OnNotesStateChanged();
+        }
+
+        private void DisposeHiddenHistories()
+        {
+            foreach (var history in _hiddenHistories.Values) history.Dispose();
+            _hiddenHistories.Clear();
         }
 
         // ===================== PERSISTENCE =====================
@@ -504,16 +608,12 @@ namespace DesktopNotes
                 ContextMenuStrip = new ContextMenuStrip()
             };
 
-            _trayIcon.ContextMenuStrip.Opening += TrayContextMenu_Opening;
+            PopulateTrayMenu(_trayIcon.ContextMenuStrip);
             _trayIcon.DoubleClick += (s, e) => Dispatcher.Invoke(ShowAllNotes);
         }
 
-        private void TrayContextMenu_Opening(object? sender, System.ComponentModel.CancelEventArgs e)
+        private void PopulateTrayMenu(ContextMenuStrip menu)
         {
-            if (_trayIcon?.ContextMenuStrip == null) return;
-            var menu = _trayIcon.ContextMenuStrip;
-            menu.Items.Clear();
-
             menu.Items.Add("New Note", null, (s, ev) => Dispatcher.Invoke(() => SpawnNewNote()));
             menu.Items.Add("Note Manager", null, (s, ev) => Dispatcher.Invoke(OpenNoteManager));
             menu.Items.Add(new ToolStripSeparator());
@@ -530,6 +630,8 @@ namespace DesktopNotes
         /// </summary>
         private void OpenNoteManager()
         {
+            var existing = Windows.OfType<NoteManagerWindow>().FirstOrDefault();
+            if (existing != null) { existing.Activate(); return; }
             var managerWindow = new NoteManagerWindow(this, _allNotes);
             managerWindow.Show();
         }
@@ -540,29 +642,36 @@ namespace DesktopNotes
             var settingsWindow = new SettingsWindow();
             if (settingsWindow.ShowDialog() == true)
             {
-                // Storage path was changed
-                var newPath = AppSettings.Load().CustomStoragePath;
-                if (string.IsNullOrWhiteSpace(newPath))
+                var newPath = settingsWindow.RequestedStoragePath;
+
+                if (_activeNoteWindows.Any(w => !w.FlushDocument()) || !_storageService.SaveNotesImmediate(_allNotes)) return;
+                if (ImageAssetStore.HasPendingImports)
+                { MessageBox.Show("Wait for image imports to finish before changing storage.", "PermaNotes"); return; }
+                try
                 {
-                    newPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PermaNotes");
+                    _storageService.PrepareStorageMigration(newPath);
+                    var settings = AppSettings.Load(); settings.CustomStoragePath = newPath;
+                    if (!settings.Save()) throw new IOException("Could not persist the new storage location. Original storage remains active.");
+                    _storageService.ActivateStorageDirectory(newPath);
                 }
+                catch (Exception ex) { MessageBox.Show("Storage was not changed: " + ex.Message, "PermaNotes"); return; }
                 
-                _storageService.ChangeStorageDirectory(newPath);
-                
-                // Hide all current note windows
-                foreach (var win in _activeNoteWindows.ToList())
+                _reloadingStorage = true;
+                try
                 {
-                    win.Close();
+                    foreach (var win in _activeNoteWindows.ToList()) win.Close();
+                    _activeNoteWindows.Clear();
+                    DisposeHiddenHistories();
+                    LoadNotes();
                 }
-                _activeNoteWindows.Clear();
-                
-                // Reload notes from the new path
-                LoadNotes();
+                finally { _reloadingStorage = false; }
             }
         }
 
         private void OpenSearch()
         {
+            var existing = Windows.OfType<SearchWindow>().FirstOrDefault();
+            if (existing != null) { existing.Activate(); return; }
             var searchWindow = new SearchWindow(_allNotes);
             searchWindow.Show();
             searchWindow.Activate();
@@ -580,6 +689,10 @@ namespace DesktopNotes
                 note.IsClosed = false;
                 CreateNoteWindowInstance(note);
                 OnNotesStateChanged();
+            }
+            else if (_hiddenHistories.ContainsKey(note.Id))
+            {
+                CreateNoteWindowInstance(note);
             }
             
             var window = _activeNoteWindows.FirstOrDefault(w => w.NoteModel == note);
@@ -704,7 +817,9 @@ namespace DesktopNotes
         private void ExitApp()
         {
             // Save all notes immediately
-            _storageService.SaveNotesImmediate(_allNotes);
+            if (_activeNoteWindows.Any(w => !w.FlushDocument()) || !_storageService.SaveNotesImmediate(_allNotes))
+            { MessageBox.Show("Some notes could not be saved. PermaNotes will stay open so you can retry.", "Unsaved notes"); return; }
+            _isExiting = true;
 
             // Cleanup
             try
@@ -720,9 +835,8 @@ namespace DesktopNotes
 
             _reminderTimer?.Stop();
             _reminderTimer?.Dispose();
-            _memoryTimer?.Stop();
-            _memoryTimer?.Dispose();
             _trayIcon?.Dispose();
+            _storageService.Dispose();
             _singleInstanceMutex?.ReleaseMutex();
             _singleInstanceMutex?.Dispose();
 
@@ -730,35 +844,22 @@ namespace DesktopNotes
             Shutdown();
         }
 
-        // ===================== MEMORY MANAGEMENT =====================
-
-        [DllImport("psapi.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool EmptyWorkingSet(IntPtr hProcess);
-
-        [DllImport("kernel32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetProcessWorkingSetSize(IntPtr process, UIntPtr minimumWorkingSetSize, UIntPtr maximumWorkingSetSize);
-
-        private void TrimMemory()
+        protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
         {
-            try
-            {
-                // Force full generation 2 collection and compact LOH / SOH heaps
-                GC.Collect(2, GCCollectionMode.Aggressive, true, true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Aggressive, true, true);
-
-                // Flush unused memory-mapped bundle pages and working set
-                var handle = System.Diagnostics.Process.GetCurrentProcess().Handle;
-                EmptyWorkingSet(handle);
-                SetProcessWorkingSetSize(handle, unchecked((UIntPtr)(ulong)-1), unchecked((UIntPtr)(ulong)-1));
-            }
-            catch { }
+            if (_notesLoaded && (_activeNoteWindows.Any(w => !w.FlushDocument()) || !_storageService.SaveNotesImmediate(_allNotes))) e.Cancel = true;
+            base.OnSessionEnding(e);
+            _isExiting = !e.Cancel;
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
+            if (_notesLoaded && !_isExiting)
+            {
+                foreach (var window in _activeNoteWindows.ToList()) window.FlushDocument();
+                _storageService.SaveNotesImmediate(_allNotes);
+            }
+            DisposeHiddenHistories();
+            _storageService.Dispose();
             _trayIcon?.Dispose();
             base.OnExit(e);
         }

@@ -7,14 +7,37 @@ A lightweight, always-on-desktop sticky note app for Windows. Notes behave like 
 PermaNotes pins rich-text sticky notes directly to your Windows desktop layer, so they're always visible (even alongside your icons, shown on Win+D) but never in the way of your open windows. Built in WPF on .NET 8, fully local — no accounts, no cloud sync, no telemetry.
 
 ## Features
+
 - **Always-on-Desktop**: Notes sit above wallpaper icons but below active application windows (survives Win+D).
+- **Images & screenshots**: Paste or drop images into notes, resize them, and open a dedicated viewer.
 - **Live Markdown & Rich Text**: Rich text editing with instant markdown expansions (`#`, `---`, `**bold**`, `==highlight==`, `-->`).
 - **Interactive Checklists**: Clickable task lists (`☐` / `☑`) with single-click toggling and smart keyboard triggers (`[] `).
-- **8-Way Smooth Resizing**: Hardware-accelerated perimeter resizing (all 4 edges and 4 corners) with zero flicker or DWM glitches.
+- **8-Way Resizing**: Resize notes from any edge or corner.
 - **Smart Paste Sanitization**: Automatically strips foreign background fills from external apps while preserving intentional highlights.
 - **Adaptive Contrast & Custom Caret**: High-contrast I-Beam cursor and dynamic text contrast that adapts to light/dark note themes.
 - **System Tray & Note Manager**: Quick tray access, global hotkeys, search, and centralized note management.
-- **100% Offline & Private**: Local atomic JSON persistence with debounced auto-save — your notes never leave your PC.
+- **Offline storage**: Notes and images stay in your chosen storage folder and save automatically.
+
+The development branch also includes automatic hyperlinks, a welcome tour,
+a **Help & Features** window organized by topic, and a dark Settings window.
+
+### Images and screenshots
+
+Capture a screenshot with `Win+Shift+S` and paste it into a note with `Ctrl+V`,
+or drop a PNG, JPEG, BMP, or GIF from File Explorer. Imported files can be up
+to 25 MiB and 40 megapixels. GIF previews use the first frame.
+
+- Right-click an image to set its width, copy it, export PNG or JPEG, save the
+  original format, reload or replace its file, or remove it from the note.
+- Double-click to open the viewer. Drag to pan, use `Ctrl` + mouse wheel to zoom,
+  and choose **Fit** or **1:1**. The viewer loads original pixels when extra detail
+  is needed. Copy and export use the full-resolution image.
+- Undo and redo cover text and image edits. Note previews stay visible during
+  resizing. **Hide All Notes** releases hidden windows and previews while
+  preserving Undo for the current session.
+
+See [implementation and verification](docs/image-support-implementation.md) for
+storage compatibility, memory measurements, and release checks.
 
 ## Why PermaNotes?
 Unlike Windows Sticky Notes or browser-based note apps, PermaNotes notes live directly on your desktop layer, so they're always visible without cluttering your taskbar or stealing window focus.
@@ -37,7 +60,7 @@ Normal Windows (Chrome / VS Code / Explorer)
 | **Desktop persistence** | Notes survive Win+D and sit behind normal windows via the Progman/WorkerW shell technique |
 | **8-Way Perimeter Resizing** | Grab any of the 4 edges or 4 corners to resize smoothly without DWM flicker; enforced min dimensions (200×150 px) |
 | **Multiple notes** | Each note has its own position, size, colour, opacity, and content |
-| **Auto-save** | Debounced (500 ms) atomic writes — no data loss on crash |
+| **Auto-save** | Debounced saves use atomic file replacement and keep recovery backups |
 | **Position/size restore** | All notes reopen exactly where you left them across multiple monitors |
 | **Single-instance** | Only one copy of PermaNotes runs at a time |
 | **No admin required** | Runs entirely in user space |
@@ -52,6 +75,7 @@ Normal Windows (Chrome / VS Code / Explorer)
 | **Interactive Checklists** | Real-time checkboxes (`☐` / `☑`) with pixel-perfect hitboxes and dedicated hover cursor detection |
 | **Smart Paste Sanitization** | Intercepts clipboard paste to strip foreign white/dark background fills from external tools (browsers, IDEs) while preserving yellow highlights |
 | **Bold / Italic / Underline** | Standard formatting via toolbar, context menu, or standard Ctrl shortcuts |
+| **Hyperlinks** | Detects typed and pasted URLs. Click a link for Open and Copy, or Ctrl+click to open it directly. |
 | **Strikethrough** | Toggle via toolbar button (S̶), context menu, or `Ctrl+Shift+X` (also via `~~text~~`) |
 | **Highlight** | Toggles yellow highlight on selection — `Ctrl+H`, toolbar, context menu, or `==text==` |
 | **Font size** | Absolute sizes (10–32 px) via context menu; relative ±2 via toolbar A↑/A↓ |
@@ -105,6 +129,7 @@ A floating toolbar appears automatically whenever you select text. It includes:
 | `Ctrl+Z` / `Ctrl+Y` | Undo / Redo |
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+U` | Bold / Italic / Underline |
 | `Ctrl+Alt+N` | **Global** — create new note from anywhere |
+| `Ctrl+Alt+S` | **Global** — search notes |
 
 #### ⚡ Live Markdown Triggers (Triggered on Space / Enter)
 | Syntax Trigger | Result |
@@ -127,8 +152,11 @@ A floating toolbar appears automatically whenever you select text. It includes:
 ### System Integration
 | Feature | Detail |
 |---|---|
-| **System tray icon** | Right-click for: New Note, Note Manager, Show/Hide All, Settings, Exit |
-| **Global hotkey** | `Ctrl+Alt+N` creates a new note even when PermaNotes is in the background |
+| **System tray icon** | Create a note, open Note Manager, show or hide all notes, open Settings, or exit |
+| **Global hotkeys** | `Ctrl+Alt+N` creates a note and `Ctrl+Alt+S` searches notes while PermaNotes is in the background |
+| **Reminders** | Schedule a Windows notification for a note |
+| **Click-through and capture controls** | Let clicks pass through a note or hide it from supported screen capture |
+| **In-app guide** | The welcome tour introduces the app. Open **Help & Features** from a note’s right-click menu for the full guide. |
 | **Start with Windows** | Optional toggle in Settings (written to HKCU registry — no admin required) |
 | **Per-Monitor V2 DPI** | Crisp rendering at 100%, 125%, 150%, 200% scale |
 | **Multi-monitor support** | Notes live on any monitor; orphaned notes auto-relocate to the primary |
@@ -159,6 +187,17 @@ Or use the user-local dotnet if already installed:
 ```powershell
 dotnet run
 ```
+
+To test with separate development notes/settings and force the welcome tour,
+exit any existing development instance from its tray menu, then run:
+
+```powershell
+& "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" run --project .\DesktopNotes.csproj -c Debug -p:DefineConstants=DEV -- --tour
+```
+
+The welcome note is created when storage is empty. The welcome tour normally
+appears only for a first launch or a newer app version; `--tour` opens it again
+without resetting notes or settings.
 
 ### Publish standalone executable
 ```powershell
@@ -228,9 +267,15 @@ See [docs/desktop-integration.md](docs/desktop-integration.md) for full technica
 
 | File | Location | Purpose |
 |---|---|---|
-| `notes.json` | `%LOCALAPPDATA%\DesktopNotes\` | All note data (RTF content, positions, colours, flags) |
+| `index.json` | Note storage folder | Note metadata and searchable text |
+| `Notes/*.rtf` | Note storage folder | Rich text and image references |
+| `Images/<note-id>/` | Note storage folder | Original image assets |
 | `settings.json` | `%LOCALAPPDATA%\DesktopNotes\` | App-wide settings (default colour, opacity, startup, storage path) |
 | `app_trace.log` | `%LOCALAPPDATA%\DesktopNotes\` | Debug trace log (auto-rotated at 512 KB) |
+
+The default note storage folder is **Documents\PermaNotes**. Change it in
+Settings to move notes and images together. DEV builds use **Documents\PermaNotes_Dev**
+and separate settings.
 
 ---
 
@@ -244,4 +289,5 @@ See [docs/desktop-integration.md](docs/desktop-integration.md) for full technica
 
 ## License
 
-Private project — all rights reserved.
+PermaNotes is licensed under the GNU General Public License, version 3
+(`GPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.

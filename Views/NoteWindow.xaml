@@ -29,7 +29,7 @@
 
         <!-- Full Context Menu -->
         <ContextMenu x:Key="NoteContextMenu" Opened="ContextMenu_Opened">
-            <!-- Context Menu (Reorganized) -->
+            <!-- 1. Text & Clipboard Operations -->
             <MenuItem Command="ApplicationCommands.Cut" Header="Cut" InputGestureText="Ctrl+X" />
             <MenuItem Command="ApplicationCommands.Copy" Header="Copy" InputGestureText="Ctrl+C" />
             <MenuItem Command="ApplicationCommands.Paste" Header="Paste" InputGestureText="Ctrl+V" />
@@ -41,6 +41,7 @@
                 <MenuItem Header="Strikethrough" Click="StrikethroughText_Click" InputGestureText="Ctrl+Shift+X" />
                 <Separator/>
                 <MenuItem Header="Highlight" Click="HighlightText_Click" InputGestureText="Ctrl+H" />
+                <MenuItem x:Name="HyperlinksMenuItem" Header="Hyperlinks" IsCheckable="True" Click="ToggleHyperlinks_Click" ToolTip="Automatically format URLs as clickable hyperlinks"/>
                 <Separator/>
                 <MenuItem Header="Font Size">
                     <MenuItem Header="10" Tag="10" Click="FontSizeMenu_Click" />
@@ -58,15 +59,16 @@
                 <MenuItem Header="Timestamp" Click="InsertTimestamp_Click" InputGestureText="Ctrl+T" />
             </MenuItem>
             <Separator/>
+
+            <!-- 2. Note Operations & Search -->
             <MenuItem Header="New Note" Click="NewNoteButton_Click" InputGestureText="Ctrl+N" />
-            <MenuItem Header="Duplicate" Click="DuplicateNote_Click"/>
-            <Separator/>
+            <MenuItem Header="Duplicate Note" Click="DuplicateNote_Click"/>
+            <MenuItem Header="Search Notes" Click="SearchNoteButton_Click" InputGestureText="Ctrl+Alt+S"/>
             <MenuItem Header="Note Manager" Click="NoteManagerMenu_Click"/>
+            <MenuItem Header="Export as Text File..." Click="ExportNoteAsText_Click"/>
             <Separator/>
-            <MenuItem Header="Set Reminder..." Click="SetReminder_Click"/>
-            <Separator/>
-            <MenuItem Header="Export as Text File" Click="ExportNoteAsText_Click"/>
-            <Separator/>
+
+            <!-- 3. Appearance -->
             <MenuItem Header="Color">
                 <MenuItem Header="Yellow" Click="ColorMenu_Click" Tag="#FFF9C4">
                     <MenuItem.Icon><Rectangle Width="14" Height="14" Fill="#FFF9C4" RadiusX="2" RadiusY="2" Stroke="#80000000" StrokeThickness="0.5"/></MenuItem.Icon>
@@ -109,14 +111,23 @@
                 <MenuItem Header="30%" Click="OpacityMenu_Click" Tag="0.30" IsCheckable="True"/>
             </MenuItem>
             <Separator/>
+
+            <!-- 4. Behavior, Security & Reminders -->
             <MenuItem x:Name="AlwaysOnTopMenuItem" Header="Always on Top" IsCheckable="True" Click="AlwaysOnTopMenu_Click"/>
-            <MenuItem x:Name="LockNoteMenuItem" Header="Lock Note" Click="LockNoteButton_Click" InputGestureText="Ctrl+Shift+L"/>
             <MenuItem x:Name="ClickThroughMenuItem" Header="Enable Click-Through" Click="ClickThroughMenu_Click"/>
+            <MenuItem x:Name="LockNoteMenuItem" Header="Lock Note" Click="LockNoteButton_Click" InputGestureText="Ctrl+Shift+L"/>
+            <MenuItem x:Name="HideFromCaptureMenuItem" Header="Hide from Screen Share" IsCheckable="True" Click="HideFromCaptureMenu_Click"/>
+            <MenuItem Header="Set Reminder..." Click="SetReminder_Click"/>
             <Separator/>
-            <MenuItem Header="Close this Note" Click="CloseNoteMenu_Click"/>
+
+            <!-- 5. Note Lifecycle -->
+            <MenuItem Header="Close Note" Click="CloseNoteMenu_Click"/>
             <MenuItem Header="Delete Note" Click="DeleteNoteButton_Click"/>
             <Separator/>
-            <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
+
+            <!-- 6. Application -->
+            <MenuItem Header="Settings..." Click="SettingsMenu_Click"/>
+            <MenuItem Header="Help &amp; Features" Click="HelpMenu_Click" FontWeight="SemiBold"/>
             <MenuItem Header="Exit PermaNotes" Click="ExitAppMenu_Click"/>
         </ContextMenu>
 
@@ -249,18 +260,85 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="ImageWidthOptionStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#BAC1CC"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Surface" Background="Transparent" CornerRadius="6" BorderThickness="1"
+                                Padding="0,5" Margin="2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#303946"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#263F42"/>
+                                <Setter Property="Foreground" Value="#B4F2E1"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#98DDCC"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ImageMenuActionStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="#E5E9EF"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="6"
+                                BorderThickness="1" Padding="7,4" Margin="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="23"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                      Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                                      Stroke="{TemplateBinding Foreground}" StrokeThickness="1.35" Stretch="Uniform"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#28333C"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#30434A"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#98DDCC"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="15">
-        <!-- Separate shadow border for hardware acceleration and snappy dragging -->
-        <Border Background="{Binding Background, ElementName=CardBorder}" Style="{StaticResource CardBorderStyle}">
-            <Border.CacheMode>
-                <BitmapCache SnapsToDevicePixels="True"/>
-            </Border.CacheMode>
-            <Border.Effect>
-                <DropShadowEffect x:Name="WindowShadow" BlurRadius="15" ShadowDepth="4" Direction="270" Color="Black" Opacity="0.15" RenderingBias="Performance"/>
-            </Border.Effect>
-        </Border>
+        <!-- A translucent edge gives the card depth without a cached blur surface. -->
+        <Border CornerRadius="15" BorderThickness="1,1,1,2" BorderBrush="#26000000"
+                Margin="-1,-1,-1,-2" IsHitTestVisible="False"/>
 
         <Border x:Name="CardBorder" Background="#FFF9C4" BorderBrush="Transparent" Style="{StaticResource CardBorderStyle}">
             <Grid>
@@ -409,11 +487,16 @@
                              PreviewMouseWheel="ContentRichTextBox_PreviewMouseWheel"
                              PreviewMouseUp="ContentRichTextBox_PreviewMouseUp"
                              PreviewMouseLeftButtonDown="ContentRichTextBox_PreviewMouseLeftButtonDown"
+                             PreviewMouseRightButtonUp="ContentRichTextBox_PreviewMouseRightButtonUp"
                              PreviewKeyDown="ContentRichTextBox_PreviewKeyDown"
                              SelectionChanged="ContentRichTextBox_SelectionChanged"
                              TextChanged="ContentRichTextBox_TextChanged"
                              IsDocumentEnabled="True"
-                             ContextMenu="{DynamicResource NoteContextMenu}">
+                             ContextMenu="{DynamicResource NoteContextMenu}"
+                             AllowDrop="True"
+                             PreviewDragOver="ContentRichTextBox_DragOver"
+                             Drop="ContentRichTextBox_Drop"
+                             SizeChanged="ContentRichTextBox_SizeChanged">
                 </RichTextBox>
 
                 <!-- Subtle corner grip decoration -->
@@ -484,6 +567,81 @@
                     <Button Style="{StaticResource FormatToolbarButtonStyle}" Click="InsertTimestamp_Click" ToolTip="Insert Timestamp (Ctrl+T)">
                         <TextBlock Text="🕐" FontSize="12" Foreground="White"/>
                     </Button>
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="2" Background="#444444"/>
+                    <Button x:Name="HyperlinksToolbarButton" Style="{StaticResource FormatToolbarButtonStyle}" Click="HyperlinksToolbarButton_Click" ToolTip="Format as Link (or toggle hyperlinks)">
+                        <Path x:Name="HyperlinksToolbarPath" Data="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" Fill="White" Stretch="Uniform" Width="12" Height="12"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Popup>
+        <!-- Hyperlink Action Popup -->
+        <Popup x:Name="HyperlinkActionPopup" AllowsTransparency="True" StaysOpen="False" Placement="Relative" PlacementTarget="{Binding ElementName=ContentRichTextBox}">
+            <Border Background="#F21E1E1E" CornerRadius="8" BorderBrush="#555555" BorderThickness="1" Padding="6,3">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10" ShadowDepth="3" Opacity="0.45" Direction="270"/>
+                </Border.Effect>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Path Data="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"
+                          Fill="#888888" Stretch="Uniform" Width="11" Height="11" VerticalAlignment="Center" Margin="3,0,5,0"/>
+                    <TextBlock x:Name="HyperlinkPopupUrlText" Text="https://example.com" MaxWidth="220" TextTrimming="CharacterEllipsis"
+                               Foreground="#61AFEF" FontSize="11" VerticalAlignment="Center" Cursor="Hand" Margin="0,0,4,0"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                               MouseLeftButtonDown="HyperlinkPopupUrlText_MouseLeftButtonDown">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="TextDecorations" Value="Underline"/>
+                                        <Setter Property="Foreground" Value="#80D0FF"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="3,2,3,2" Background="#444444"/>
+
+                    <!-- Copy Link Button -->
+                    <Button x:Name="CopyHyperlinkBtn" Style="{StaticResource FormatToolbarButtonStyle}" Click="CopyHyperlinkBtn_Click" ToolTip="Copy link address" Width="22" Height="22" Margin="1,0,2,0">
+                        <Path Data="M3 1 C2.4 1 2 1.4 2 2 L2 8 C2 8.6 2.4 9 3 9 L4 9 L4 11 C4 11.6 4.4 12 5 12 L10 12 C10.6 12 11 11.6 11 11 L11 5 C11 4.4 10.6 4 10 4 L9 4 L9 2 C9 1.4 8.6 1 8 1 L3 1 Z M4 2 L8 2 L8 4 L5 4 C4.4 4 4 4.4 4 5 L4 10 L3 10 L3 2 Z M5 5 L10 5 L10 11 L5 11 L5 5 Z"
+                              Fill="#CCCCCC" Width="10" Height="10" Stretch="Uniform"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- Image Action Popup -->
+        <Popup x:Name="ImageActionPopup" AllowsTransparency="True" StaysOpen="False" Placement="MousePoint">
+            <Border Width="294" Background="#191E25" CornerRadius="11" BorderBrush="#46535F"
+                    BorderThickness="1" Padding="9" SnapsToDevicePixels="True" UseLayoutRounding="True"
+                    KeyboardNavigation.TabNavigation="Cycle">
+                <StackPanel>
+                    <TextBlock Text="Image width" Foreground="#BAC1CC" FontSize="11" FontWeight="SemiBold" Margin="5,1,0,6"/>
+                    <Border CornerRadius="8" Background="#222A34" Padding="2">
+                        <UniformGrid Rows="1">
+                            <RadioButton x:Name="ImageRatio30Btn" GroupName="ImageWidth" Style="{StaticResource ImageWidthOptionStyle}" Content="30%" Tag="0.30" Click="ImageSizePreset_Click" ToolTip="30% of note width"/>
+                            <RadioButton x:Name="ImageRatio50Btn" GroupName="ImageWidth" Style="{StaticResource ImageWidthOptionStyle}" Content="50%" Tag="0.50" Click="ImageSizePreset_Click" ToolTip="50% of note width"/>
+                            <RadioButton x:Name="ImageRatio75Btn" GroupName="ImageWidth" Style="{StaticResource ImageWidthOptionStyle}" Content="75%" Tag="0.75" Click="ImageSizePreset_Click" ToolTip="75% of note width"/>
+                            <RadioButton x:Name="ImageRatio100Btn" GroupName="ImageWidth" Style="{StaticResource ImageWidthOptionStyle}" Content="100%" Tag="1.00" Click="ImageSizePreset_Click" ToolTip="100% of note width"/>
+                        </UniformGrid>
+                    </Border>
+                    <UniformGrid Columns="2" Margin="0,7,0,0">
+                        <Button x:Name="ViewImageFullBtn" Style="{StaticResource ImageMenuActionStyle}" Content="View full size" Click="OpenFullSizeImageBtn_Click"
+                                Tag="M2,6 V2 H6 M10,2 H14 V6 M14,10 V14 H10 M6,14 H2 V10 M5,11 L11,5 M7,5 H11 V9"/>
+                        <Button x:Name="CopyImageBtn" Style="{StaticResource ImageMenuActionStyle}" Content="Copy image" Click="CopyImageBtn_Click"
+                                Tag="M5,5 H14 V14 H5 Z M2,11 V2 H11"/>
+                        <Button x:Name="SaveImageAsBtn" Style="{StaticResource ImageMenuActionStyle}" Content="Export PNG/JPEG…" Click="SaveImageAsBtn_Click"
+                                Tag="M7,3 H2 V14 H13 V9 M8,2 H14 V8 M14,2 L7,9"/>
+                        <Button x:Name="SaveOriginalImageBtn" Style="{StaticResource ImageMenuActionStyle}" Content="Save original…" Click="SaveOriginalImageBtn_Click"
+                                ToolTip="Save a copy in its original file format" Tag="M8,2 V10 M5,7 L8,10 L11,7 M2,11 V14 H14 V11"/>
+                        <Button Style="{StaticResource ImageMenuActionStyle}" Content="Reload image" Click="RetryImageBtn_Click"
+                                ToolTip="Load the linked file again" Tag="M13,6 A5.5,5.5 0 1 0 13,11 M13,2 V6 H9"/>
+                        <Button x:Name="RelinkImageBtn" Style="{StaticResource ImageMenuActionStyle}" Content="Replace image…" Click="RelinkImageBtn_Click"
+                                ToolTip="Choose a replacement file or locate the original" Tag="M2,9 V3 H10 M2,6 H12 M9,3 L12,6 L9,9 M14,7 V13 H6 M14,10 H4 M7,7 L4,10 L7,13"/>
+                    </UniformGrid>
+                    <Border Height="1" Background="#39444F" Margin="4,4,4,3"/>
+                    <Button x:Name="DeleteImageBtn" Style="{StaticResource ImageMenuActionStyle}" Content="Remove from note" Foreground="#FFADAD" Click="DeleteImageBtn_Click"
+                            Tag="M2,4 H14 M6,4 V2 H10 V4 M4,4 L5,14 H11 L12,4 M7,7 V11 M9,7 V11"/>
                 </StackPanel>
             </Border>
         </Popup>

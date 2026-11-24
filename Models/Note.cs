@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace DesktopNotes.Models
 {
@@ -33,6 +34,10 @@ namespace DesktopNotes.Models
         /// highlight, custom font sizes, bullet lists, etc.
         /// </summary>
         public string RtfText { get; set; } = string.Empty;
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool IsContentLoaded { get; set; } = true;
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? ContentFilePath { get; set; }
 
         /// <summary>Window left edge position in screen pixels.</summary>
         public double X { get; set; } = 200;
@@ -111,5 +116,10 @@ namespace DesktopNotes.Models
         /// When <c>true</c> the note is hidden from screen capture tools (Teams, Zoom, etc.).
         /// </summary>
         public bool IsHiddenFromCapture { get; set; } = false;
+
+        /// <summary>
+        /// Filenames of images embedded in this note, stored in Images/{ShortId}/.
+        /// </summary>
+        public List<string> Images { get; set; } = new();
     }
 }

@@ -1,10 +1,9 @@
 using System;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using DesktopNotes.Services;
 
 namespace DesktopNotes.Views
@@ -13,11 +12,17 @@ namespace DesktopNotes.Views
     {
         private readonly StartupService _startupService = new();
         private string _currentStoragePath = "";
+        public string RequestedStoragePath => _currentStoragePath;
 
         public SettingsWindow()
         {
             InitializeComponent();
             LoadSettings();
+        }
+
+        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            DragMove();
         }
 
         private void LoadSettings()
@@ -26,11 +31,7 @@ namespace DesktopNotes.Views
 
             var settings = AppSettings.Load();
             
-            _currentStoragePath = settings.CustomStoragePath;
-            if (string.IsNullOrWhiteSpace(_currentStoragePath))
-            {
-                _currentStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PermaNotes");
-            }
+            _currentStoragePath = NoteStorageService.GetEffectiveStoragePath();
             StoragePathText.Text = _currentStoragePath;
 
             ConfirmDeleteCheckBox.IsChecked = settings.ConfirmBeforeDelete;
@@ -115,27 +116,22 @@ namespace DesktopNotes.Views
 
             // Save app settings
             var settings = AppSettings.Load();
-            bool storagePathChanged = false;
-            
-            if (settings.CustomStoragePath != _currentStoragePath)
-            {
-                settings.CustomStoragePath = _currentStoragePath;
-                storagePathChanged = true;
-            }
+            bool storagePathChanged = !string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(_currentStoragePath)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(NoteStorageService.GetEffectiveStoragePath())),
+                StringComparison.OrdinalIgnoreCase);
 
             settings.ConfirmBeforeDelete = ConfirmDeleteCheckBox.IsChecked == true;
             settings.DefaultOpacity = OpacitySlider.Value;
             settings.DefaultNoteColor = (DefaultColorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "#FFF9C4";
             
-            settings.Save();
-
-            if (storagePathChanged)
+            if (!settings.Save())
             {
-                // App.xaml.cs will handle the reload
-                DialogResult = true; 
+                System.Windows.MessageBox.Show(this, "PermaNotes could not save your settings.", "Settings");
+                return;
             }
 
-            Close();
+            DialogResult = storagePathChanged;
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -154,10 +150,21 @@ namespace DesktopNotes.Views
         public double DefaultOpacity { get; set; } = 1.0;
         public string DefaultNoteColor { get; set; } = "#FFF9C4";
         public string CustomStoragePath { get; set; } = "";
+        public string LastSeenVersion { get; set; } = "";
+
+        /// <summary>
+        /// When <c>true</c> raw URLs pasted or typed into notes are automatically
+        /// converted to clickable hyperlinks. When <c>false</c> URLs stay as plain text.
+        /// </summary>
+        public bool HyperlinksEnabled { get; set; } = true;
 
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+#if DEV
+            "DesktopNotes_Dev", "settings.json");
+#else
             "DesktopNotes", "settings.json");
+#endif
 
         public static AppSettings Load()
         {
@@ -173,16 +180,17 @@ namespace DesktopNotes.Views
             return new AppSettings();
         }
 
-        public void Save()
+        public bool Save()
         {
             try
             {
                 var dir = Path.GetDirectoryName(SettingsPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir!);
                 var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(SettingsPath, json);
+                DesktopNotes.Services.AtomicFile.WriteText(SettingsPath, json);
+                return true;
             }
-            catch { }
+            catch { return false; }
         }
     }
 }

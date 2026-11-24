@@ -123,7 +123,7 @@ namespace DesktopNotes.Views
                     }
                     else
                     {
-                        vm.Model.IsClosed = true;
+                        _app.CloseHiddenNote(vm.Model);
                     }
                 }
                 RefreshList();
@@ -152,8 +152,7 @@ namespace DesktopNotes.Views
                     }
                     else
                     {
-                        _allNotes.Remove(vm.Model);
-                        _app.OnNotesStateChanged();
+                        _app.DeleteStoredNote(vm.Model);
                     }
                     RefreshList();
                 }
