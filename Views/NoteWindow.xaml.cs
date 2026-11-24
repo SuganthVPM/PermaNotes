@@ -1653,7 +1653,7 @@ namespace DesktopNotes.Views
 
                     string linkText = rawMatch.Value;
                     string linkUrl = linkText;
-                    if (!linkUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
+                    if (!linkUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
                         !linkUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
                         !linkUrl.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
                     {
@@ -2661,8 +2661,8 @@ namespace DesktopNotes.Views
         private Hyperlink CreateHyperlinkElement(string displayText, string targetUrl, TextPointer? insertionPoint = null)
         {
             var linkRun = new Run(displayText);
-            Hyperlink link = insertionPoint != null 
-                ? new Hyperlink(linkRun, insertionPoint) 
+            Hyperlink link = insertionPoint != null
+                ? new Hyperlink(linkRun, insertionPoint)
                 : new Hyperlink(linkRun);
 
             FormatHyperlink(link, targetUrl);
@@ -2698,8 +2698,8 @@ namespace DesktopNotes.Views
             }
             catch { }
 
-            link.Foreground = isDark 
-                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0xC3, 0xF7)) 
+            link.Foreground = isDark
+                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0xC3, 0xF7))
                 : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x66, 0xCC));
 
             link.RequestNavigate -= Hyperlink_RequestNavigate;

@@ -260,7 +260,7 @@ namespace DesktopNotes
                 // --- Show Onboarding / Updates Wizard ---
                 var settings = AppSettings.Load();
                 var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
-                
+
                 bool forceTour = e.Args != null && e.Args.Any(a => a.Equals("--tour", StringComparison.OrdinalIgnoreCase) || a.Equals("--welcome", StringComparison.OrdinalIgnoreCase));
                 bool forceUpdateTour = e.Args != null && e.Args.Any(a => a.Equals("--tour-update", StringComparison.OrdinalIgnoreCase));
 
@@ -643,7 +643,7 @@ namespace DesktopNotes
             if (settingsWindow.ShowDialog() == true)
             {
                 var newPath = settingsWindow.RequestedStoragePath;
-                
+
                 if (_activeNoteWindows.Any(w => !w.FlushDocument()) || !_storageService.SaveNotesImmediate(_allNotes)) return;
                 if (ImageAssetStore.HasPendingImports)
                 { MessageBox.Show("Wait for image imports to finish before changing storage.", "PermaNotes"); return; }
