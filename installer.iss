@@ -1,6 +1,9 @@
+#define PermaNotesVersion "1.7.0"
+
 [Setup]
 AppName=Perma Notes
-AppVersion=1.6.0
+AppVersion={#PermaNotesVersion}
+VersionInfoVersion={#PermaNotesVersion}.0
 AppPublisher=Antigravity
 AppPublisherURL=https://github.com
 DefaultDirName={localappdata}\Programs\Perma Notes
@@ -9,7 +12,7 @@ DisableProgramGroupPage=yes
 ; Require lowest privileges so the installer doesn't need Admin rights
 PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=PermaNotes_Setup_v1.6.0
+OutputBaseFilename=PermaNotes_Setup_v{#PermaNotesVersion}
 SetupIconFile=Assets\icon.ico
 UninstallDisplayIcon={app}\PermaNotes.exe
 AppMutex=DesktopNotes_SingleInstance_F7A2B
@@ -25,7 +28,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startup"; Description: "Automatically start Perma Notes when Windows starts"; GroupDescription: "System Integration"
 
 [Files]
-Source: "dist\PermaNotes_v1.6.0.exe"; DestDir: "{app}"; DestName: "PermaNotes.exe"; Flags: ignoreversion
+Source: "dist\PermaNotes_v{#PermaNotesVersion}.exe"; DestDir: "{app}"; DestName: "PermaNotes.exe"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Perma Notes"; Filename: "{app}\PermaNotes.exe"

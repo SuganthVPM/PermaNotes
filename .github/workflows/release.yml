@@ -16,6 +16,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Validate release version
+      id: version
+      shell: pwsh
+      run: |
+        [xml]$project = Get-Content -Raw ./DesktopNotes.csproj
+        [xml]$manifest = Get-Content -Raw ./AppxManifest.xml
+        $version = [string]$project.Project.PropertyGroup.Version
+        if ($version -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Expected a three-part version in DesktopNotes.csproj."
+        }
+        if ($manifest.Package.Identity.Version -ne "$version.0") {
+          throw "The MSIX package version must match $version.0."
+        }
+        if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+          throw "Tag $env:GITHUB_REF_NAME does not match app version v$version."
+        }
+        "app=$version" >> $env:GITHUB_OUTPUT
+
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
@@ -24,15 +42,28 @@ jobs:
     - name: Run Build Scripts
       run: |
         .\build.ps1
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         .\build_msix.ps1
+
+    - name: Upload packages for a manual build
+      if: github.event_name == 'workflow_dispatch' && github.ref_type == 'branch'
+      uses: actions/upload-artifact@v4
+      with:
+        name: PermaNotes-v${{ steps.version.outputs.app }}
+        if-no-files-found: error
+        path: |
+          dist/PermaNotes_v${{ steps.version.outputs.app }}.exe
+          dist/PermaNotes_Setup_v${{ steps.version.outputs.app }}.exe
+          dist/PermaNotes_v${{ steps.version.outputs.app }}.msix
 
     - name: Release to GitHub
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
+        fail_on_unmatched_files: true
         files: |
-          dist/PermaNotes_v*.exe
-          dist/PermaNotes_Setup_v*.exe
-          dist/PermaNotes_v*.msix
+          dist/PermaNotes_v${{ steps.version.outputs.app }}.exe
+          dist/PermaNotes_Setup_v${{ steps.version.outputs.app }}.exe
+          dist/PermaNotes_v${{ steps.version.outputs.app }}.msix
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

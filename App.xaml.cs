@@ -246,7 +246,7 @@ namespace DesktopNotes
                 RegisterGlobalHotkey();
 
                 // --- Load and display notes ---
-                LoadNotes();
+                bool hadSavedNotes = LoadNotes();
 
                 // --- Register Toast Activation ---
                 RegisterToastActivation();
@@ -264,36 +264,20 @@ namespace DesktopNotes
                 bool forceTour = e.Args != null && e.Args.Any(a => a.Equals("--tour", StringComparison.OrdinalIgnoreCase) || a.Equals("--welcome", StringComparison.OrdinalIgnoreCase));
                 bool forceUpdateTour = e.Args != null && e.Args.Any(a => a.Equals("--tour-update", StringComparison.OrdinalIgnoreCase));
 
-                if (forceUpdateTour)
+                OnboardingMode? onboardingMode;
+                if (forceUpdateTour) onboardingMode = OnboardingMode.Update;
+                else if (forceTour) onboardingMode = OnboardingMode.FirstTime;
+                else onboardingMode = GetAutomaticOnboardingMode(settings.LastSeenVersion, currentVersion,
+                    hadSavedNotes || AppSettings.HasSavedSettings);
+
+                if (onboardingMode is { } mode)
                 {
-                    var onboarding = new OnboardingWindow(OnboardingMode.Update);
+                    var onboarding = new OnboardingWindow(mode);
                     onboarding.Show();
                     onboarding.Activate();
                 }
-                else if (forceTour || string.IsNullOrEmpty(settings.LastSeenVersion))
+                if (!forceTour && !forceUpdateTour && settings.LastSeenVersion != currentVersion)
                 {
-                    // First time install or explicit CLI flag
-                    var onboarding = new OnboardingWindow(OnboardingMode.FirstTime);
-                    onboarding.Show();
-                    onboarding.Activate();
-                    if (!forceTour)
-                    {
-                        settings.LastSeenVersion = currentVersion;
-                        settings.Save();
-                    }
-                }
-                else if (settings.LastSeenVersion != currentVersion)
-                {
-                    // Update detected
-                    if (Version.TryParse(currentVersion, out var currV) && Version.TryParse(settings.LastSeenVersion, out var lastV))
-                    {
-                        if (currV > lastV)
-                        {
-                            var onboarding = new OnboardingWindow(OnboardingMode.Update);
-                            onboarding.Show();
-                            onboarding.Activate();
-                        }
-                    }
                     settings.LastSeenVersion = currentVersion;
                     settings.Save();
                 }
@@ -309,14 +293,27 @@ namespace DesktopNotes
             }
         }
 
+        private static OnboardingMode? GetAutomaticOnboardingMode(string? lastSeenVersion, string currentVersion,
+            bool hasExistingData)
+        {
+            // Releases before onboarding did not record a last-seen version.
+            if (string.IsNullOrEmpty(lastSeenVersion))
+                return hasExistingData ? OnboardingMode.Update : OnboardingMode.FirstTime;
+
+            return Version.TryParse(currentVersion, out var current) &&
+                Version.TryParse(lastSeenVersion, out var previous) && current > previous
+                ? OnboardingMode.Update : null;
+        }
+
         // ===================== NOTE WINDOW LIFECYCLE =====================
 
-        private void LoadNotes()
+        private bool LoadNotes()
         {
             var savedNotes = _storageService.LoadNotes();
             Trace($"Loaded {savedNotes.Count} saved notes");
 
-            if (savedNotes.Count == 0)
+            bool hadSavedNotes = savedNotes.Count != 0;
+            if (!hadSavedNotes)
             {
                 var settings = AppSettings.Load();
                 var welcomeNote = new Note
@@ -353,6 +350,7 @@ namespace DesktopNotes
                     CreateNoteWindowInstance(note);
                 }
             }
+            return hadSavedNotes;
         }
 
         private void CreateNoteWindowInstance(Note note)

@@ -18,7 +18,7 @@ PermaNotes pins rich-text sticky notes directly to your Windows desktop layer, s
 - **System Tray & Note Manager**: Quick tray access, global hotkeys, search, and centralized note management.
 - **Offline storage**: Notes and images stay in your chosen storage folder and save automatically.
 
-The development branch also includes automatic hyperlinks, a welcome tour,
+PermaNotes also includes automatic hyperlinks, a welcome tour,
 a **Help & Features** window organized by topic, and a dark Settings window.
 
 ### Images and screenshots

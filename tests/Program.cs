@@ -24,7 +24,7 @@ internal static class Program
         if (args.Length == 2 && args[0].StartsWith("--memory-", StringComparison.Ordinal)) return MemoryBenchmark(args[0] == "--memory-full", args[1]);
         try
         {
-            TokenTests(); CodecTests(); AssetTests(); StorageTests(); HistoryTests(); MigrationTests(); CollectionTests(); SessionTests(); ThumbnailLifetimeTest(); RenderPreview(); MemoryComparisons();
+            TokenTests(); CodecTests(); AssetTests(); StorageTests(); HistoryTests(); MigrationTests(); CollectionTests(); OnboardingTests(); SessionTests(); ThumbnailLifetimeTest(); RenderPreview(); MemoryComparisons();
             Console.WriteLine($"PASS: {_checks} checks. Isolated fixtures: {Root}");
             return 0;
         }
@@ -229,6 +229,20 @@ internal static class Program
         string corrupt = Path.Combine(root, "Notes", "bad.rtf"); File.WriteAllText(corrupt, "not rtf");
         Throws(() => ImageAssetMaintenance.CollectAtColdStart(root, DateTime.UtcNow), "Incomplete recovery scan aborts collection");
     }
+    private static void OnboardingTests()
+    {
+        var selectMode = typeof(DesktopNotes.App).GetMethod("GetAutomaticOnboardingMode",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        OnboardingMode? SelectMode(string previousVersion, bool hasExistingData) =>
+            (OnboardingMode?)selectMode.Invoke(null, new object[] { previousVersion, "1.7.0", hasExistingData });
+
+        Check(SelectMode("", false) == OnboardingMode.FirstTime, "A new install shows the welcome tour");
+        Check(SelectMode("", true) == OnboardingMode.Update, "An upgrade from before onboarding shows the update tour");
+        Check(SelectMode("1.6.0", true) == OnboardingMode.Update, "An upgrade with a stored version shows the update tour");
+        Check(SelectMode("1.7.0", true) == null, "The update tour does not repeat on the same version");
+        Check(SelectMode("1.8.0", true) == null, "A downgrade does not show the update tour");
+    }
+
     private static void SessionTests()
     {
         var native = new System.Windows.Controls.RichTextBox();
